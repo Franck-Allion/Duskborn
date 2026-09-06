@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import avatarUrl from '../../assets/avatar1.png';
 import { GameMap } from '../game/map/GameMap';
 
 const CELL_SIZE = 56;
@@ -10,6 +11,10 @@ export class MapScene extends Phaser.Scene {
 
   constructor() {
     super('map');
+  }
+
+  preload(): void {
+    this.load.image('player-avatar', avatarUrl);
   }
 
   create(): void {
@@ -39,5 +44,14 @@ export class MapScene extends Phaser.Scene {
           .setStrokeStyle(2, 0x64748b);
       }
     }
+
+    // Render player logical position on top of the correct map tile.
+    const playerPos = this.map.getPlayerPosition();
+    const playerX = startX + playerPos.x * cellStep;
+    const playerY = startY + playerPos.y * cellStep;
+
+    this.add
+      .image(playerX, playerY, 'player-avatar')
+      .setDisplaySize(CELL_SIZE, CELL_SIZE);
   }
 }

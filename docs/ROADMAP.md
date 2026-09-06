@@ -39,7 +39,7 @@ Success condition:
 - [x] Add tests for map dimensions
 - [x] Render the 6x6 map in Phaser
 - [x] Add a player logical position
-- [ ] Render player position
+- [x] Render player position
 
 Success condition:
 
