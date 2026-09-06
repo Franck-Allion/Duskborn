@@ -35,10 +35,10 @@ Success condition:
 
 # 0.1 Core Map
 
-- [ ] Create a pure TypeScript logical 6x6 map model
+- [x] Create a pure TypeScript logical 6x6 map model
 - [x] Add tests for map dimensions
 - [x] Render the 6x6 map in Phaser
-- [ ] Add a player logical position
+- [x] Add a player logical position
 - [ ] Render player position
 
 Success condition:

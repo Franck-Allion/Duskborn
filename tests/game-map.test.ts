@@ -37,4 +37,22 @@ describe('GameMap', () => {
 
     expect(map.getTile({ x: 6, y: 0 })).toBeUndefined();
   });
+
+  describe('Player Position', () => {
+    it('starts the player at a near-central position by default (3,3)', () => {
+      const map = new GameMap();
+      const playerPos = map.getPlayerPosition();
+
+      expect(playerPos).toEqual({ x: 3, y: 3 });
+      expect(map.isInside(playerPos)).toBe(true);
+    });
+
+    it('starts the player at a valid near-central position for custom map sizes', () => {
+      const map = new GameMap(10, 10);
+      const playerPos = map.getPlayerPosition();
+
+      expect(playerPos).toEqual({ x: 5, y: 5 });
+      expect(map.isInside(playerPos)).toBe(true);
+    });
+  });
 });
