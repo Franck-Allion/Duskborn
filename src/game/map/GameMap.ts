@@ -1,3 +1,5 @@
+import type { RunState } from '../core/RunState';
+
 export type TileType = 'empty';
 
 export interface Tile {
@@ -49,7 +51,11 @@ export class GameMap {
     return this.tiles[position.y][position.x];
   }
 
-  canMove(target: Position): boolean {
+  canMove(target: Position, runState: RunState): boolean {
+    if (runState.actionPoints <= 0) {
+      return false;
+    }
+
     if (!this.isInside(target)) {
       return false;
     }
@@ -61,12 +67,13 @@ export class GameMap {
     return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
   }
 
-  movePlayer(target: Position): boolean {
-    if (!this.canMove(target)) {
+  movePlayer(target: Position, runState: RunState): boolean {
+    if (!this.canMove(target, runState)) {
       return false;
     }
 
     this.playerPosition = { ...target };
+    runState.actionPoints -= 1;
     return true;
   }
 }

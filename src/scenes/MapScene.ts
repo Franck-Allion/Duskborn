@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import avatarUrl from '../../assets/avatar1.png';
+import { createInitialRunState } from '../game/core/RunState';
 import { GameMap } from '../game/map/GameMap';
 
 const CELL_SIZE = 56;
@@ -8,6 +9,7 @@ const CELL_GAP = 4;
 
 export class MapScene extends Phaser.Scene {
   private readonly map = new GameMap();
+  private readonly runState = createInitialRunState();
   private cells: Phaser.GameObjects.Rectangle[][] = [];
   private playerImage!: Phaser.GameObjects.Image;
   private startX = 0;
@@ -55,7 +57,7 @@ export class MapScene extends Phaser.Scene {
 
         rect.on('pointerover', () => {
           const coords = rect.getData('coords') as { x: number; y: number };
-          if (this.map.canMove(coords)) {
+          if (this.map.canMove(coords, this.runState)) {
             // Stronger highlight when hovering a valid destination
             rect.setFillStyle(0x3b82f6); // bright blue
             rect.setStrokeStyle(2, 0x93c5fd); // sky blue border
@@ -73,7 +75,7 @@ export class MapScene extends Phaser.Scene {
 
         rect.on('pointerdown', () => {
           const coords = rect.getData('coords') as { x: number; y: number };
-          if (this.map.movePlayer(coords)) {
+          if (this.map.movePlayer(coords, this.runState)) {
             // Player successfully moved! Update Phaser visual and refresh all cell highlights
             this.updatePlayerVisualPosition();
             this.refreshAllCellVisuals();
@@ -103,7 +105,7 @@ export class MapScene extends Phaser.Scene {
     }
 
     const coords = { x, y };
-    if (this.map.canMove(coords)) {
+    if (this.map.canMove(coords, this.runState)) {
       // Valid destination: subtle highlight
       rect.setFillStyle(0x1e3a8a); // navy blue
       rect.setStrokeStyle(2, 0x3b82f6); // bright blue border

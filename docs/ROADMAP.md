@@ -67,12 +67,12 @@ Success condition:
 - [x] Add current day to RunState
 - [x] Add daily action points to RunState
 - [ ] Start each day with 3 base actions
-- [ ] Make movement spend 1 action
-- [ ] Prevent movement at 0 actions
+- [x] Make movement spend 1 action
+- [x] Prevent movement at 0 actions
 - [ ] Display day in HUD
 - [ ] Display remaining actions in HUD
 - [ ] Add End Day button
-- [ ] Add tests for action consumption
+- [x] Add tests for action consumption
 
 Success condition:
 
