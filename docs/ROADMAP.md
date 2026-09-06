@@ -53,8 +53,8 @@ Success condition:
 - [x] Reject diagonal movement
 - [x] Reject out-of-bounds movement
 - [x] Add movement tests
-- [ ] Connect map clicks to movement
-- [ ] Visually update player position
+- [x] Connect map clicks to movement
+- [x] Visually update player position
 
 Success condition:
 
