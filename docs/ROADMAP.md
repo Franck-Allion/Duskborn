@@ -69,8 +69,8 @@ Success condition:
 - [ ] Start each day with 3 base actions
 - [x] Make movement spend 1 action
 - [x] Prevent movement at 0 actions
-- [ ] Display day in HUD
-- [ ] Display remaining actions in HUD
+- [x] Display day in HUD
+- [x] Display remaining actions in HUD
 - [ ] Add End Day button
 - [x] Add tests for action consumption
 

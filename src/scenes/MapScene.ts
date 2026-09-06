@@ -12,6 +12,8 @@ export class MapScene extends Phaser.Scene {
   private readonly runState = createInitialRunState();
   private cells: Phaser.GameObjects.Rectangle[][] = [];
   private playerImage!: Phaser.GameObjects.Image;
+  private dayText!: Phaser.GameObjects.Text;
+  private actionsText!: Phaser.GameObjects.Text;
   private startX = 0;
   private startY = 0;
 
@@ -30,6 +32,20 @@ export class MapScene extends Phaser.Scene {
     const gridHeight = this.map.height * cellStep - CELL_GAP;
     this.startX = centerX - gridWidth / 2 + CELL_SIZE / 2;
     this.startY = centerY - gridHeight / 2 + CELL_SIZE / 2;
+
+    this.dayText = this.add.text(32, 24, '', {
+      fontSize: '20px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    });
+
+    this.actionsText = this.add.text(960 - 32, 24, '', {
+      fontSize: '20px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    }).setOrigin(1, 0);
 
     this.cells = [];
 
@@ -76,9 +92,10 @@ export class MapScene extends Phaser.Scene {
         rect.on('pointerdown', () => {
           const coords = rect.getData('coords') as { x: number; y: number };
           if (this.map.movePlayer(coords, this.runState)) {
-            // Player successfully moved! Update Phaser visual and refresh all cell highlights
+            // Player successfully moved! Update Phaser visual, refresh all cell highlights, and update HUD
             this.updatePlayerVisualPosition();
             this.refreshAllCellVisuals();
+            this.updateHUD();
           }
         });
       }
@@ -96,6 +113,7 @@ export class MapScene extends Phaser.Scene {
 
     // Initial draw of highlights
     this.refreshAllCellVisuals();
+    this.updateHUD();
   }
 
   private updateCellVisuals(x: number, y: number): void {
@@ -138,5 +156,26 @@ export class MapScene extends Phaser.Scene {
       duration: 150,
       ease: 'Power2.easeOut',
     });
+  }
+
+  private updateHUD(): void {
+    // Day display
+    this.dayText.setText(`DAY ${this.runState.day}`);
+
+    // Action points display: filled dots (●) and empty dots (○)
+    const total = this.runState.baseActionPoints;
+    const remaining = this.runState.actionPoints;
+
+    let dots = '';
+    for (let i = 0; i < total; i += 1) {
+      if (i < remaining) {
+        dots += '● ';
+      } else {
+        dots += '○ ';
+      }
+    }
+
+    dots = dots.trim();
+    this.actionsText.setText(`Actions: ${dots}`);
   }
 }
