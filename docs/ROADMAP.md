@@ -64,8 +64,8 @@ Success condition:
 
 # 0.3 Day and Actions
 
-- [ ] Add current day to RunState
-- [ ] Add daily action points to RunState
+- [x] Add current day to RunState
+- [x] Add daily action points to RunState
 - [ ] Start each day with 3 base actions
 - [ ] Make movement spend 1 action
 - [ ] Prevent movement at 0 actions
