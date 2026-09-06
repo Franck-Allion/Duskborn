@@ -1,0 +1,42 @@
+export type TileType = 'empty';
+
+export interface Tile {
+  type: TileType;
+}
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export class GameMap {
+  readonly width: number;
+  readonly height: number;
+
+  private readonly tiles: Tile[][];
+
+  constructor(width = 6, height = 6) {
+    this.width = width;
+    this.height = height;
+    this.tiles = Array.from({ length: height }, () =>
+      Array.from({ length: width }, () => ({ type: 'empty' as const })),
+    );
+  }
+
+  isInside(position: Position): boolean {
+    return (
+      position.x >= 0 &&
+      position.x < this.width &&
+      position.y >= 0 &&
+      position.y < this.height
+    );
+  }
+
+  getTile(position: Position): Tile | undefined {
+    if (!this.isInside(position)) {
+      return undefined;
+    }
+
+    return this.tiles[position.y][position.x];
+  }
+}
