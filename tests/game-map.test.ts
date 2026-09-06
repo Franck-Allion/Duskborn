@@ -8,6 +8,13 @@ describe('GameMap', () => {
 
     expect(map.width).toBe(6);
     expect(map.height).toBe(6);
+
+    const tiles = Array.from({ length: map.height }, (_, y) =>
+      Array.from({ length: map.width }, (_, x) => map.getTile({ x, y })),
+    ).flat();
+
+    expect(tiles).toHaveLength(36);
+    expect(tiles.every((tile) => tile !== undefined)).toBe(true);
   });
 
   it('validates coordinates inside the map', () => {
