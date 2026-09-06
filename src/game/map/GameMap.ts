@@ -14,7 +14,7 @@ export class GameMap {
   readonly height: number;
 
   private readonly tiles: Tile[][];
-  private readonly playerPosition: Position;
+  private playerPosition: Position;
 
   constructor(width = 6, height = 6) {
     this.width = width;
@@ -47,5 +47,26 @@ export class GameMap {
     }
 
     return this.tiles[position.y][position.x];
+  }
+
+  canMove(target: Position): boolean {
+    if (!this.isInside(target)) {
+      return false;
+    }
+
+    const dx = Math.abs(target.x - this.playerPosition.x);
+    const dy = Math.abs(target.y - this.playerPosition.y);
+
+    // Orthogonal movement of exactly 1 tile
+    return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+  }
+
+  movePlayer(target: Position): boolean {
+    if (!this.canMove(target)) {
+      return false;
+    }
+
+    this.playerPosition = { ...target };
+    return true;
   }
 }

@@ -55,4 +55,71 @@ describe('GameMap', () => {
       expect(map.isInside(playerPos)).toBe(true);
     });
   });
+
+  describe('Movement Rules', () => {
+    it('allows valid orthogonal moves of exactly one tile', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      expect(map.canMove({ x: 3, y: 2 })).toBe(true); // Up
+      expect(map.canMove({ x: 3, y: 4 })).toBe(true); // Down
+      expect(map.canMove({ x: 2, y: 3 })).toBe(true); // Left
+      expect(map.canMove({ x: 4, y: 3 })).toBe(true); // Right
+    });
+
+    it('rejects diagonal movement', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      expect(map.canMove({ x: 2, y: 2 })).toBe(false); // Up-Left
+      expect(map.canMove({ x: 4, y: 2 })).toBe(false); // Up-Right
+      expect(map.canMove({ x: 2, y: 4 })).toBe(false); // Down-Left
+      expect(map.canMove({ x: 4, y: 4 })).toBe(false); // Down-Right
+    });
+
+    it('rejects movements of more than one tile', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      expect(map.canMove({ x: 3, y: 1 })).toBe(false); // 2 tiles Up
+      expect(map.canMove({ x: 3, y: 5 })).toBe(false); // 2 tiles Down
+      expect(map.canMove({ x: 1, y: 3 })).toBe(false); // 2 tiles Left
+      expect(map.canMove({ x: 5, y: 3 })).toBe(false); // 2 tiles Right
+    });
+
+    it('rejects staying in the same tile (distance of 0)', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      expect(map.canMove({ x: 3, y: 3 })).toBe(false);
+    });
+
+    it('rejects movement outside the map boundaries', () => {
+      const map = new GameMap(); // Starts at (3,3)
+      // Manually set player position near boundary for edge-case check
+      // Move to (0,0) first, then check out-of-bounds
+      map.movePlayer({ x: 2, y: 3 });
+      map.movePlayer({ x: 1, y: 3 });
+      map.movePlayer({ x: 0, y: 3 });
+      map.movePlayer({ x: 0, y: 2 });
+      map.movePlayer({ x: 0, y: 1 });
+      map.movePlayer({ x: 0, y: 0 });
+
+      expect(map.getPlayerPosition()).toEqual({ x: 0, y: 0 });
+      expect(map.canMove({ x: -1, y: 0 })).toBe(false); // Left out of bounds
+      expect(map.canMove({ x: 0, y: -1 })).toBe(false); // Up out of bounds
+    });
+
+    it('applies valid moves and updates player position', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      const moved = map.movePlayer({ x: 3, y: 4 });
+      expect(moved).toBe(true);
+      expect(map.getPlayerPosition()).toEqual({ x: 3, y: 4 });
+    });
+
+    it('does not apply invalid moves and keeps player position unchanged', () => {
+      const map = new GameMap(); // Starts at (3,3)
+
+      const moved = map.movePlayer({ x: 5, y: 5 }); // Invalid move
+      expect(moved).toBe(false);
+      expect(map.getPlayerPosition()).toEqual({ x: 3, y: 3 });
+    });
+  });
 });

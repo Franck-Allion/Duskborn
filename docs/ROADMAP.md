@@ -49,10 +49,10 @@ Success condition:
 
 # 0.2 Movement
 
-- [ ] Implement orthogonal movement rules in pure TypeScript
-- [ ] Reject diagonal movement
-- [ ] Reject out-of-bounds movement
-- [ ] Add movement tests
+- [x] Implement orthogonal movement rules in pure TypeScript
+- [x] Reject diagonal movement
+- [x] Reject out-of-bounds movement
+- [x] Add movement tests
 - [ ] Connect map clicks to movement
 - [ ] Visually update player position
 
