@@ -271,6 +271,6 @@ Always report:
 5. any architectural decision made;
 6. any known limitation.
 7. if needed, how to change the assets ans their requirements in terms of size (sprite, sfx, ...)
-8. the commit message
+8. the commit message only, don't commit the code
 
 Do not continue automatically to the next roadmap item.
