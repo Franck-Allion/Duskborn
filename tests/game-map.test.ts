@@ -40,7 +40,7 @@ describe('GameMap', () => {
     expect(map.height).toBe(2);
   });
 
-  it('allows movement onto Gold without changing resources or removing the tile', () => {
+  it('allows movement onto Gold, grants the expected Gold resource, and leaves the tile unchanged', () => {
     const map = new GameMap();
     const runState = createInitialRunState();
     const resources = { ...runState.resources };
@@ -50,20 +50,26 @@ describe('GameMap', () => {
     expect(map.movePlayer(target, runState)).toBe(true);
     expect(map.getPlayerPosition()).toEqual(target);
     expect(runState.actionPoints).toBe(2);
-    expect(runState.resources).toEqual(resources);
+    expect(runState.resources.gold).toBe(resources.gold + 10);
+    expect(runState.resources.mana).toBe(resources.mana);
+    expect(runState.resources.army).toBe(resources.army);
     expect(map.getTile(target)).toEqual({ type: 'gold' });
   });
 
-  it('allows movement onto Mana without changing resources or removing the tile', () => {
+  it('allows movement onto Mana, grants the expected Mana resource, and leaves the tile unchanged', () => {
     const map = new GameMap();
     const runState = createInitialRunState();
     const resources = { ...runState.resources };
 
     // Move step-by-step from starting position (3, 3) to Mana tile (1, 4):
-    // 1. Move to (2, 3)
+    // 1. Move to (2, 3) (empty tile)
     expect(map.movePlayer({ x: 2, y: 3 }, runState)).toBe(true);
-    // 2. Move to (1, 3)
+    expect(runState.resources).toEqual(resources); // no change yet
+
+    // 2. Move to (1, 3) (empty tile)
     expect(map.movePlayer({ x: 1, y: 3 }, runState)).toBe(true);
+    expect(runState.resources).toEqual(resources); // no change yet
+
     // 3. Move to (1, 4) (Mana tile)
     const target = { x: 1, y: 4 };
     expect(map.canMove(target, runState)).toBe(true);
@@ -71,18 +77,22 @@ describe('GameMap', () => {
 
     expect(map.getPlayerPosition()).toEqual(target);
     expect(runState.actionPoints).toBe(0);
-    expect(runState.resources).toEqual(resources);
+    expect(runState.resources.gold).toBe(resources.gold);
+    expect(runState.resources.mana).toBe(resources.mana + 3);
+    expect(runState.resources.army).toBe(resources.army);
     expect(map.getTile(target)).toEqual({ type: 'mana' });
   });
 
-  it('allows movement onto Army without changing resources or removing the tile', () => {
+  it('allows movement onto Army, grants the expected Army resource, and leaves the tile unchanged', () => {
     const map = new GameMap();
     const runState = createInitialRunState();
     const resources = { ...runState.resources };
 
     // Move step-by-step from starting position (3, 3) to Army tile (2, 2):
-    // 1. Move to (2, 3)
+    // 1. Move to (2, 3) (empty tile)
     expect(map.movePlayer({ x: 2, y: 3 }, runState)).toBe(true);
+    expect(runState.resources).toEqual(resources); // no change yet
+
     // 2. Move to (2, 2) (Army tile)
     const target = { x: 2, y: 2 };
     expect(map.canMove(target, runState)).toBe(true);
@@ -90,8 +100,54 @@ describe('GameMap', () => {
 
     expect(map.getPlayerPosition()).toEqual(target);
     expect(runState.actionPoints).toBe(1);
-    expect(runState.resources).toEqual(resources);
+    expect(runState.resources.gold).toBe(resources.gold);
+    expect(runState.resources.mana).toBe(resources.mana);
+    expect(runState.resources.army).toBe(resources.army + 2);
     expect(map.getTile(target)).toEqual({ type: 'army' });
+  });
+
+  it('entering an empty tile grants nothing', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const initialResources = { ...runState.resources };
+
+    // Move to adjacent empty tile (2, 3)
+    const success = map.movePlayer({ x: 2, y: 3 }, runState);
+    expect(success).toBe(true);
+    expect(runState.resources).toEqual(initialResources);
+  });
+
+  it('invalid movement grants nothing', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const initialResources = { ...runState.resources };
+
+    // Attempt to move to non-adjacent Gold tile (1, 1) or out of bounds
+    const success1 = map.movePlayer({ x: 1, y: 1 }, runState);
+    const success2 = map.movePlayer({ x: -1, y: 3 }, runState);
+
+    expect(success1).toBe(false);
+    expect(success2).toBe(false);
+    expect(runState.resources).toEqual(initialResources);
+  });
+
+  it('resource collection happens only after a successful move and position update', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const initialResources = { ...runState.resources };
+    const target = { x: 4, y: 3 }; // Gold tile
+
+    // Before move
+    expect(map.getPlayerPosition()).toEqual({ x: 3, y: 3 });
+    expect(runState.resources).toEqual(initialResources);
+
+    // Perform successful move
+    const success = map.movePlayer(target, runState);
+    expect(success).toBe(true);
+
+    // After move
+    expect(map.getPlayerPosition()).toEqual(target);
+    expect(runState.resources.gold).toBe(initialResources.gold + 10);
   });
 
   it('creates a 6x6 map by default', () => {

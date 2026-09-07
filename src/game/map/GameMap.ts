@@ -1,4 +1,5 @@
 import type { RunState } from '../core/RunState';
+import { collectResource } from '../systems/ResourceSystem';
 
 export type TileType = 'empty' | 'gold' | 'mana' | 'army';
 
@@ -83,6 +84,12 @@ export class GameMap {
 
     this.playerPosition = { ...target };
     runState.actionPoints -= 1;
+
+    const tile = this.getTile(target);
+    if (tile) {
+      collectResource(tile, runState);
+    }
+
     return true;
   }
 }
