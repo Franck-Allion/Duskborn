@@ -19,7 +19,10 @@ new Phaser.Game({
     postBoot: (game) => {
       const resize = () => {
         const parent = game.canvas.parentElement!;
-        const fit = Math.min(parent.clientWidth / 960, parent.clientHeight / 540);
+        const fit = Math.min(
+          parent.clientWidth / 960,
+          parent.clientHeight / 540,
+        );
         // Whole-number enlargement; small windows still show the complete game.
         game.scale.setZoom(fit >= 1 ? Math.floor(fit) : Math.max(fit, 0.01));
       };

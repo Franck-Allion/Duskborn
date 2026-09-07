@@ -110,6 +110,8 @@ export class MapScene extends Phaser.Scene {
           this.add.image(screenX, screenY, 'icon_gold').setDisplaySize(32, 32);
         } else if (tile.type === 'mana') {
           this.add.image(screenX, screenY, 'icon_mana').setDisplaySize(32, 32);
+        } else if (tile.type === 'army') {
+          this.add.image(screenX, screenY, 'icon_army').setDisplaySize(32, 32);
         }
 
         // Enable Interactivity

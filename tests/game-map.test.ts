@@ -4,10 +4,11 @@ import { createInitialRunState } from '../src/game/core/RunState';
 import { GameMap, type Tile } from '../src/game/map/GameMap';
 
 describe('GameMap', () => {
-  it('places exactly two Gold tiles and two Mana tiles in the fixed 6x6 layout', () => {
+  it('places exactly two Gold tiles, two Mana tiles, and two Army tiles in the fixed 6x6 layout', () => {
     const map = new GameMap();
     const goldTile: Tile = { type: 'gold' };
     const manaTile: Tile = { type: 'mana' };
+    const armyTile: Tile = { type: 'army' };
 
     // Gold tiles
     expect(map.getTile({ x: 1, y: 1 })).toEqual(goldTile);
@@ -17,6 +18,10 @@ describe('GameMap', () => {
     expect(map.getTile({ x: 1, y: 4 })).toEqual(manaTile);
     expect(map.getTile({ x: 4, y: 1 })).toEqual(manaTile);
 
+    // Army tiles
+    expect(map.getTile({ x: 2, y: 2 })).toEqual(armyTile);
+    expect(map.getTile({ x: 3, y: 4 })).toEqual(armyTile);
+
     expect(map.getTile(map.getPlayerPosition())).toEqual({ type: 'empty' });
 
     const tiles = Array.from({ length: map.height }, (_, y) =>
@@ -24,7 +29,8 @@ describe('GameMap', () => {
     ).flat();
     expect(tiles.filter((tile) => tile?.type === 'gold')).toHaveLength(2);
     expect(tiles.filter((tile) => tile?.type === 'mana')).toHaveLength(2);
-    expect(tiles.filter((tile) => tile?.type === 'empty')).toHaveLength(32);
+    expect(tiles.filter((tile) => tile?.type === 'army')).toHaveLength(2);
+    expect(tiles.filter((tile) => tile?.type === 'empty')).toHaveLength(30);
   });
 
   it('keeps custom-sized maps empty', () => {
@@ -67,6 +73,25 @@ describe('GameMap', () => {
     expect(runState.actionPoints).toBe(0);
     expect(runState.resources).toEqual(resources);
     expect(map.getTile(target)).toEqual({ type: 'mana' });
+  });
+
+  it('allows movement onto Army without changing resources or removing the tile', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const resources = { ...runState.resources };
+
+    // Move step-by-step from starting position (3, 3) to Army tile (2, 2):
+    // 1. Move to (2, 3)
+    expect(map.movePlayer({ x: 2, y: 3 }, runState)).toBe(true);
+    // 2. Move to (2, 2) (Army tile)
+    const target = { x: 2, y: 2 };
+    expect(map.canMove(target, runState)).toBe(true);
+    expect(map.movePlayer(target, runState)).toBe(true);
+
+    expect(map.getPlayerPosition()).toEqual(target);
+    expect(runState.actionPoints).toBe(1);
+    expect(runState.resources).toEqual(resources);
+    expect(map.getTile(target)).toEqual({ type: 'army' });
   });
 
   it('creates a 6x6 map by default', () => {
