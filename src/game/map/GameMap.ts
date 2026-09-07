@@ -88,6 +88,7 @@ export class GameMap {
     const tile = this.getTile(target);
     if (tile) {
       collectResource(tile, runState);
+      tile.type = 'empty';
     }
 
     return true;

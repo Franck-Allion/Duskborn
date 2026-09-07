@@ -107,11 +107,20 @@ export class MapScene extends Phaser.Scene {
         this.cells[y][x] = rect;
 
         if (tile.type === 'gold') {
-          this.add.image(screenX, screenY, 'icon_gold').setDisplaySize(32, 32);
+          const img = this.add
+            .image(screenX, screenY, 'icon_gold')
+            .setDisplaySize(32, 32);
+          rect.setData('icon', img);
         } else if (tile.type === 'mana') {
-          this.add.image(screenX, screenY, 'icon_mana').setDisplaySize(32, 32);
+          const img = this.add
+            .image(screenX, screenY, 'icon_mana')
+            .setDisplaySize(32, 32);
+          rect.setData('icon', img);
         } else if (tile.type === 'army') {
-          this.add.image(screenX, screenY, 'icon_army').setDisplaySize(32, 32);
+          const img = this.add
+            .image(screenX, screenY, 'icon_army')
+            .setDisplaySize(32, 32);
+          rect.setData('icon', img);
         }
 
         // Enable Interactivity
@@ -242,6 +251,16 @@ export class MapScene extends Phaser.Scene {
       // Neutral cell
       rect.setFillStyle(0x263244); // neutral slate
       rect.setStrokeStyle(2, 0x64748b); // neutral gray-blue border
+    }
+
+    // Clean up collected resource icons
+    const tile = this.map.getTile(coords);
+    if (tile && tile.type === 'empty') {
+      const icon = rect.getData('icon') as Phaser.GameObjects.Image | undefined;
+      if (icon) {
+        icon.destroy();
+        rect.setData('icon', undefined);
+      }
     }
   }
 
