@@ -414,6 +414,17 @@ This separation is important for testing and future iteration.
 
 ## 15. MVP Visual Style
 
+The game renders at 960x540 with Phaser pixel-art filtering and pixelated canvas
+scaling. It uses the largest whole-number enlargement that fits the window,
+centered with margins. Below 960x540 it shrinks proportionally so all controls
+remain accessible; pixel-perfect scaling is not guaranteed at those small sizes
+or with fractional browser/OS display scaling.
+
+HUD icons fit inside a 32x32 box while preserving their aspect ratio. For the
+clearest artwork, author icons for 32x32 and the player sprite for 56x56, with
+transparent padding where needed. Existing source artwork is preserved; disabling
+filtering cannot recover details lost when reducing larger images.
+
 For the first iterations:
 
 - rectangles;

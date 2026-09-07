@@ -68,7 +68,8 @@ export class MapScene extends Phaser.Scene {
 
     this.resourceTexts = RESOURCE_ICONS.map((icon, index) => {
       const x = 240 + index * 152;
-      this.add.image(x, 40, icon.key).setDisplaySize(32, 32);
+      const image = this.add.image(x, 40, icon.key);
+      image.setScale(32 / Math.max(image.width, image.height));
       this.add.text(x + 24, 12, icon.label, {
         fontFamily: 'monospace',
         fontSize: '12px',
