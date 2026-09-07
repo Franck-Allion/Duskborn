@@ -85,6 +85,18 @@ The exact visual ordering can evolve.
 
 Numbers must be easy to read without hovering.
 
+The current HUD shows Army, Mana, and Gold with 32x32 icons and vertically
+centered numeric amounts, refreshed from RunState by `MapScene.updateHUD()`.
+Resource groups have equal spacing and room for four-digit amounts.
+
+Temporary PNG icons are included at `assets/icons/army.png`,
+`assets/icons/mana.png`, and `assets/icons/gold.png`. Replace these files with
+final square PNG artwork (preferably 32x32 with transparency), keeping the same
+filenames. Vite imports them and Phaser preloads them under `icon_army`,
+`icon_mana`, and `icon_gold`; no HUD logic changes are needed. Larger square
+sources are scaled to 32x32. Keep the placeholders until replacements are ready,
+then reload the development page or rebuild for production.
+
 ---
 
 ## 4. Action Point Display
@@ -154,6 +166,12 @@ No diagonal movement unless the design later changes.
 ---
 
 ## 6. Tile Feedback
+
+The default 6x6 map has fixed Gold tiles at zero-based coordinates (1, 1) and
+(4, 3). Each uses the existing `icon_gold` texture at 32x32 above the cell
+background, preserving movement and hover highlights. Moving onto Gold currently
+only spends the normal movement action; it grants no resources and leaves the
+tile intact. Custom-sized maps remain empty.
 
 A selected or hovered tile may show:
 

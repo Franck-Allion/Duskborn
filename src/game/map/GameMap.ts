@@ -1,6 +1,6 @@
 import type { RunState } from '../core/RunState';
 
-export type TileType = 'empty';
+export type TileType = 'empty' | 'gold';
 
 export interface Tile {
   type: TileType;
@@ -28,6 +28,11 @@ export class GameMap {
       x: Math.floor(width / 2),
       y: Math.floor(height / 2),
     };
+    // Fixed prototype layout; custom-sized maps keep their empty layout.
+    if (width === 6 && height === 6) {
+      this.tiles[1][1] = { type: 'gold' };
+      this.tiles[3][4] = { type: 'gold' };
+    }
   }
 
   getPlayerPosition(): Position {

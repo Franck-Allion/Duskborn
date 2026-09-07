@@ -1,9 +1,44 @@
 import { describe, expect, it } from 'vitest';
 
 import { createInitialRunState } from '../src/game/core/RunState';
-import { GameMap } from '../src/game/map/GameMap';
+import { GameMap, type Tile } from '../src/game/map/GameMap';
 
 describe('GameMap', () => {
+  it('places exactly two Gold tiles in the fixed 6x6 layout', () => {
+    const map = new GameMap();
+    const goldTile: Tile = { type: 'gold' };
+    expect(map.getTile({ x: 1, y: 1 })).toEqual(goldTile);
+    expect(map.getTile({ x: 4, y: 3 })).toEqual(goldTile);
+    expect(map.getTile(map.getPlayerPosition())).toEqual({ type: 'empty' });
+
+    const tiles = Array.from({ length: map.height }, (_, y) =>
+      Array.from({ length: map.width }, (_, x) => map.getTile({ x, y })),
+    ).flat();
+    expect(tiles.filter((tile) => tile?.type === 'gold')).toHaveLength(2);
+    expect(tiles.filter((tile) => tile?.type === 'empty')).toHaveLength(34);
+  });
+
+  it('keeps custom-sized maps empty', () => {
+    const map = new GameMap(2, 2);
+    expect(map.getTile({ x: 1, y: 1 })).toEqual({ type: 'empty' });
+    expect(map.width).toBe(2);
+    expect(map.height).toBe(2);
+  });
+
+  it('allows movement onto Gold without changing resources or removing the tile', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const resources = { ...runState.resources };
+    const target = { x: 4, y: 3 };
+
+    expect(map.canMove(target, runState)).toBe(true);
+    expect(map.movePlayer(target, runState)).toBe(true);
+    expect(map.getPlayerPosition()).toEqual(target);
+    expect(runState.actionPoints).toBe(2);
+    expect(runState.resources).toEqual(resources);
+    expect(map.getTile(target)).toEqual({ type: 'gold' });
+  });
+
   it('creates a 6x6 map by default', () => {
     const map = new GameMap();
 

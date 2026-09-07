@@ -85,8 +85,8 @@ Success condition:
 - [x] Add Gold to RunState
 - [x] Add Mana to RunState
 - [x] Add Army to RunState
-- [ ] Display resources in HUD
-- [ ] Add Gold tile
+- [x] Display resources in HUD
+- [x] Add Gold tile
 - [ ] Add Mana tile
 - [ ] Add Army tile
 - [ ] Collect resource when entering tile

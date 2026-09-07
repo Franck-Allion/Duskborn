@@ -1,12 +1,20 @@
 import Phaser from 'phaser';
 
 import avatarUrl from '../../assets/avatar1.png';
+import armyIconUrl from '../../assets/icons/army.png';
+import manaIconUrl from '../../assets/icons/mana.png';
+import goldIconUrl from '../../assets/icons/gold.png';
 import { createInitialRunState } from '../game/core/RunState';
 import { GameMap } from '../game/map/GameMap';
 import { endDay } from '../game/systems/TurnSystem';
 
 const CELL_SIZE = 56;
 const CELL_GAP = 4;
+const RESOURCE_ICONS = [
+  { resource: 'army', label: 'Army', key: 'icon_army', url: armyIconUrl },
+  { resource: 'mana', label: 'Mana', key: 'icon_mana', url: manaIconUrl },
+  { resource: 'gold', label: 'Gold', key: 'icon_gold', url: goldIconUrl },
+] as const;
 
 export class MapScene extends Phaser.Scene {
   private readonly map = new GameMap();
@@ -15,6 +23,7 @@ export class MapScene extends Phaser.Scene {
   private playerImage!: Phaser.GameObjects.Image;
   private dayText!: Phaser.GameObjects.Text;
   private actionsText!: Phaser.GameObjects.Text;
+  private resourceTexts: Phaser.GameObjects.Text[] = [];
   private endDayButton!: Phaser.GameObjects.Text;
   private transitionPanel!: Phaser.GameObjects.Container;
   private startX = 0;
@@ -26,6 +35,11 @@ export class MapScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('player-avatar', avatarUrl);
+    for (const icon of RESOURCE_ICONS) {
+      if (!this.textures.exists(icon.key)) {
+        this.load.image(icon.key, icon.url);
+      }
+    }
   }
 
   create(): void {
@@ -52,6 +66,24 @@ export class MapScene extends Phaser.Scene {
       })
       .setOrigin(1, 0);
 
+    this.resourceTexts = RESOURCE_ICONS.map((icon, index) => {
+      const x = 240 + index * 152;
+      this.add.image(x, 40, icon.key).setDisplaySize(32, 32);
+      this.add.text(x + 24, 12, icon.label, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#cbd5e1',
+      });
+      return this.add
+        .text(x + 24, 40, '', {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+        })
+        .setOrigin(0, 0.5);
+    });
+
     this.cells = [];
 
     for (let y = 0; y < this.map.height; y += 1) {
@@ -72,6 +104,10 @@ export class MapScene extends Phaser.Scene {
 
         rect.setData('coords', { x, y });
         this.cells[y][x] = rect;
+
+        if (tile.type === 'gold') {
+          this.add.image(screenX, screenY, 'icon_gold').setDisplaySize(32, 32);
+        }
 
         // Enable Interactivity
         rect.setInteractive();
@@ -229,6 +265,12 @@ export class MapScene extends Phaser.Scene {
   }
 
   private updateHUD(): void {
+    RESOURCE_ICONS.forEach((icon, index) => {
+      this.resourceTexts[index].setText(
+        String(this.runState.resources[icon.resource]),
+      );
+    });
+
     // Day display
     this.dayText.setText(`DAY ${this.runState.day}`);
 
