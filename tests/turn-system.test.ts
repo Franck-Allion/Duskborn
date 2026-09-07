@@ -13,8 +13,9 @@ describe('End Day', () => {
         day: 4,
         baseActionPoints: 5,
         actionPoints: actions,
+        resources: { gold: 27, mana: 8, army: 14 },
       };
-      const before = { ...runState };
+      const before = structuredClone(runState);
 
       endDay(runState);
 
@@ -24,8 +25,10 @@ describe('End Day', () => {
 
   it('is safe to press twice', () => {
     const runState = createInitialRunState();
+    runState.resources = { gold: 27, mana: 8, army: 14 };
+    runState.actionPoints = 1;
     endDay(runState);
-    const before = { ...runState };
+    const before = structuredClone(runState);
 
     endDay(runState);
 
@@ -41,9 +44,13 @@ describe('End Day', () => {
     endDay(runState);
 
     expect(map.canMove(target, runState)).toBe(false);
+    const resources = { ...runState.resources };
+    const tile = { ...map.getTile(target)! };
     expect(map.movePlayer(target, runState)).toBe(false);
     expect(map.getPlayerPosition()).toEqual(position);
     expect(runState.actionPoints).toBe(3);
+    expect(runState.resources).toEqual(resources);
+    expect(map.getTile(target)).toEqual(tile);
   });
 
   it('waits for End Day after the last movement action', () => {

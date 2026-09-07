@@ -26,6 +26,7 @@ export class MapScene extends Phaser.Scene {
   private resourceTexts: Phaser.GameObjects.Text[] = [];
   private endDayButton!: Phaser.GameObjects.Text;
   private transitionPanel!: Phaser.GameObjects.Container;
+  private transitionTitle!: Phaser.GameObjects.Text;
   private startX = 0;
   private startY = 0;
 
@@ -182,19 +183,21 @@ export class MapScene extends Phaser.Scene {
         this.refreshPhaseVisuals();
       });
 
+    this.transitionTitle = this.add
+      .text(0, -30, '', {
+        fontFamily: 'monospace',
+        fontSize: '28px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
     this.transitionPanel = this.add
       .container(centerX, centerY, [
         this.add
           .rectangle(0, 0, 440, 144, 0x111827, 0.98)
           .setStrokeStyle(2, 0xea580c),
-        this.add
-          .text(0, -30, `DAY ${this.runState.day} ENDS`, {
-            fontFamily: 'monospace',
-            fontSize: '28px',
-            fontStyle: 'bold',
-            color: '#ffffff',
-          })
-          .setOrigin(0.5),
+        this.transitionTitle,
         this.add
           .text(0, 28, 'The Duskborn approaches.', {
             fontFamily: 'monospace',
@@ -223,6 +226,7 @@ export class MapScene extends Phaser.Scene {
     }
 
     if (!exploring) {
+      this.transitionTitle.setText(`DAY ${this.runState.day} ENDS`);
       this.endDayButton.disableInteractive().setAlpha(0.4);
       this.input.setDefaultCursor('default');
       this.tweens.killTweensOf(this.playerImage);

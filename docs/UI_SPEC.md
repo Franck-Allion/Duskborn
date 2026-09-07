@@ -228,6 +228,13 @@ End-of-day combat begins
 
 ## 8. End-of-Day Transition
 
+End Day switches the pure RunState phase from `exploration` to `combat`.
+It preserves the current day, remaining actions, and resources. Map input and
+movement highlights are disabled; the panel reads the current day when shown.
+Zero actions does not trigger this transition automatically. Repeated End Day
+calls leave the state unchanged. The panel remains until combat is implemented;
+there is currently no next-day flow.
+
 Suggested minimal presentation:
 
 ```text
