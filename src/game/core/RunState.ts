@@ -5,6 +5,11 @@ export interface RunState {
   day: number;
   baseActionPoints: number;
   actionPoints: number;
+  resources: {
+    gold: number;
+    mana: number;
+    army: number;
+  };
 }
 
 /**
@@ -16,5 +21,10 @@ export function createInitialRunState(): RunState {
     day: 1,
     baseActionPoints: 3,
     actionPoints: 3,
+    resources: {
+      gold: 0,
+      mana: 0,
+      army: 10,
+    },
   };
 }

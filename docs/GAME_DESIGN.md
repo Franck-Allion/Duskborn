@@ -120,6 +120,8 @@ The map may become procedural later.
 
 ## 5. Main Resources
 
+New runs start with **0 Gold**, **0 Mana**, and **10 Army**.
+
 Initial core resources:
 
 ### Gold

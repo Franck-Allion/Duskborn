@@ -82,9 +82,9 @@ Success condition:
 
 # 0.4 Basic Resources
 
-- [ ] Add Gold to RunState
-- [ ] Add Mana to RunState
-- [ ] Add Army to RunState
+- [x] Add Gold to RunState
+- [x] Add Mana to RunState
+- [x] Add Army to RunState
 - [ ] Display resources in HUD
 - [ ] Add Gold tile
 - [ ] Add Mana tile
