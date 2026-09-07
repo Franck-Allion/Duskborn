@@ -1,6 +1,6 @@
 import type { RunState } from '../core/RunState';
 
-export type TileType = 'empty' | 'gold';
+export type TileType = 'empty' | 'gold' | 'mana';
 
 export interface Tile {
   type: TileType;
@@ -32,6 +32,8 @@ export class GameMap {
     if (width === 6 && height === 6) {
       this.tiles[1][1] = { type: 'gold' };
       this.tiles[3][4] = { type: 'gold' };
+      this.tiles[4][1] = { type: 'mana' };
+      this.tiles[1][4] = { type: 'mana' };
     }
   }
 

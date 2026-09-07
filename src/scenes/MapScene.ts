@@ -107,6 +107,8 @@ export class MapScene extends Phaser.Scene {
 
         if (tile.type === 'gold') {
           this.add.image(screenX, screenY, 'icon_gold').setDisplaySize(32, 32);
+        } else if (tile.type === 'mana') {
+          this.add.image(screenX, screenY, 'icon_mana').setDisplaySize(32, 32);
         }
 
         // Enable Interactivity

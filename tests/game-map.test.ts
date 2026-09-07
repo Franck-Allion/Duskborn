@@ -4,18 +4,27 @@ import { createInitialRunState } from '../src/game/core/RunState';
 import { GameMap, type Tile } from '../src/game/map/GameMap';
 
 describe('GameMap', () => {
-  it('places exactly two Gold tiles in the fixed 6x6 layout', () => {
+  it('places exactly two Gold tiles and two Mana tiles in the fixed 6x6 layout', () => {
     const map = new GameMap();
     const goldTile: Tile = { type: 'gold' };
+    const manaTile: Tile = { type: 'mana' };
+
+    // Gold tiles
     expect(map.getTile({ x: 1, y: 1 })).toEqual(goldTile);
     expect(map.getTile({ x: 4, y: 3 })).toEqual(goldTile);
+
+    // Mana tiles
+    expect(map.getTile({ x: 1, y: 4 })).toEqual(manaTile);
+    expect(map.getTile({ x: 4, y: 1 })).toEqual(manaTile);
+
     expect(map.getTile(map.getPlayerPosition())).toEqual({ type: 'empty' });
 
     const tiles = Array.from({ length: map.height }, (_, y) =>
       Array.from({ length: map.width }, (_, x) => map.getTile({ x, y })),
     ).flat();
     expect(tiles.filter((tile) => tile?.type === 'gold')).toHaveLength(2);
-    expect(tiles.filter((tile) => tile?.type === 'empty')).toHaveLength(34);
+    expect(tiles.filter((tile) => tile?.type === 'mana')).toHaveLength(2);
+    expect(tiles.filter((tile) => tile?.type === 'empty')).toHaveLength(32);
   });
 
   it('keeps custom-sized maps empty', () => {
@@ -37,6 +46,27 @@ describe('GameMap', () => {
     expect(runState.actionPoints).toBe(2);
     expect(runState.resources).toEqual(resources);
     expect(map.getTile(target)).toEqual({ type: 'gold' });
+  });
+
+  it('allows movement onto Mana without changing resources or removing the tile', () => {
+    const map = new GameMap();
+    const runState = createInitialRunState();
+    const resources = { ...runState.resources };
+
+    // Move step-by-step from starting position (3, 3) to Mana tile (1, 4):
+    // 1. Move to (2, 3)
+    expect(map.movePlayer({ x: 2, y: 3 }, runState)).toBe(true);
+    // 2. Move to (1, 3)
+    expect(map.movePlayer({ x: 1, y: 3 }, runState)).toBe(true);
+    // 3. Move to (1, 4) (Mana tile)
+    const target = { x: 1, y: 4 };
+    expect(map.canMove(target, runState)).toBe(true);
+    expect(map.movePlayer(target, runState)).toBe(true);
+
+    expect(map.getPlayerPosition()).toEqual(target);
+    expect(runState.actionPoints).toBe(0);
+    expect(runState.resources).toEqual(resources);
+    expect(map.getTile(target)).toEqual({ type: 'mana' });
   });
 
   it('creates a 6x6 map by default', () => {
@@ -138,7 +168,7 @@ describe('GameMap', () => {
       map.movePlayer({ x: 2, y: 3 }, runState);
       map.movePlayer({ x: 1, y: 3 }, runState);
       map.movePlayer({ x: 0, y: 3 }, runState);
-      
+
       // Reset action points so we can keep moving in tests without running out
       runState.actionPoints = 3;
       map.movePlayer({ x: 0, y: 2 }, runState);
