@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { MapScene } from './scenes/MapScene';
+import { CombatScene } from './scenes/CombatScene';
 import './style.css';
 
 new Phaser.Game({
@@ -10,7 +11,7 @@ new Phaser.Game({
   parent: 'game',
   backgroundColor: '#111827',
   pixelArt: true,
-  scene: MapScene,
+  scene: [MapScene, CombatScene],
   scale: {
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

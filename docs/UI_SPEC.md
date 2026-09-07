@@ -232,8 +232,10 @@ End Day switches the pure RunState phase from `exploration` to `combat`.
 It preserves the current day, remaining actions, and resources. Map input and
 movement highlights are disabled; the panel reads the current day when shown.
 Zero actions does not trigger this transition automatically. Repeated End Day
-calls leave the state unchanged. The panel remains until combat is implemented;
-there is currently no next-day flow.
+calls leave the state unchanged. A CONTINUE button opens CombatScene and stops
+MapScene, passing the same RunState object. CombatScene displays DUSKBORN ATTACK
+and Player / VS / Duskborn placeholders. The phase stays `combat`; there are no
+combat actions or next-day flow yet.
 
 Suggested minimal presentation:
 

@@ -184,7 +184,7 @@ export class MapScene extends Phaser.Scene {
       });
 
     this.transitionTitle = this.add
-      .text(0, -30, '', {
+      .text(0, -60, '', {
         fontFamily: 'monospace',
         fontSize: '28px',
         fontStyle: 'bold',
@@ -195,16 +195,33 @@ export class MapScene extends Phaser.Scene {
     this.transitionPanel = this.add
       .container(centerX, centerY, [
         this.add
-          .rectangle(0, 0, 440, 144, 0x111827, 0.98)
+          .rectangle(0, 0, 440, 230, 0x111827, 0.98)
           .setStrokeStyle(2, 0xea580c),
         this.transitionTitle,
         this.add
-          .text(0, 28, 'The Duskborn approaches.', {
+          .text(0, -5, 'The Duskborn approaches.', {
             fontFamily: 'monospace',
             fontSize: '20px',
             color: '#fed7aa',
           })
           .setOrigin(0.5),
+        this.add
+          .text(0, 65, 'CONTINUE', {
+            fontFamily: 'monospace',
+            fontSize: '22px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            backgroundColor: '#9a3412',
+            padding: { x: 24, y: 12 },
+          })
+          .setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+            if (this.runState.phase === 'combat') {
+              this.input.enabled = false;
+              this.scene.start('combat', { runState: this.runState });
+            }
+          }),
       ])
       .setDepth(2)
       .setVisible(false);

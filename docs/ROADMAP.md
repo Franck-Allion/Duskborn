@@ -109,7 +109,8 @@ Success condition:
 - [x] Prevent map actions during combat
 
 Implemented alongside the requested 0.3 End Day step using a pure RunState
-phase and a message panel in MapScene. No CombatScene or combat resolution yet.
+phase and a message panel in MapScene. CONTINUE now opens a minimal CombatScene
+with the same RunState and stops MapScene. No combat resolution yet.
 End Day preserves the day and remaining actions. Zero actions does not end
 exploration automatically; the player must press End Day.
 
