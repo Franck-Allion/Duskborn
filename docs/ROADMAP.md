@@ -71,7 +71,7 @@ Success condition:
 - [x] Prevent movement at 0 actions
 - [x] Display day in HUD
 - [x] Display remaining actions in HUD
-- [ ] Add End Day button
+- [x] Add End Day button
 - [x] Add tests for action consumption
 
 Success condition:
@@ -101,12 +101,17 @@ Success condition:
 
 # 0.5 End-of-Day Flow
 
-- [ ] Create explicit exploration phase
-- [ ] End Day transitions out of exploration
-- [ ] Add end-of-day transition message
-- [ ] Display "The Duskborn approaches."
-- [ ] Introduce combat phase / CombatScene
-- [ ] Prevent map actions during combat
+- [x] Create explicit exploration phase
+- [x] End Day transitions out of exploration
+- [x] Add end-of-day transition message
+- [x] Display "The Duskborn approaches."
+- [x] Introduce combat phase / CombatScene
+- [x] Prevent map actions during combat
+
+Implemented alongside the requested 0.3 End Day step using a pure RunState
+phase and a message panel in MapScene. No CombatScene or combat resolution yet.
+End Day preserves the day and remaining actions. Zero actions does not end
+exploration automatically; the player must press End Day.
 
 Success condition:
 

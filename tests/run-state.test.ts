@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { createInitialRunState } from '../src/game/core/RunState';
 
 describe('RunState Initialization', () => {
+  it('starts a new run in exploration', () => {
+    expect(createInitialRunState().phase).toBe('exploration');
+  });
+
   it('starts a new run on Day 1', () => {
     const runState = createInitialRunState();
     expect(runState.day).toBe(1);

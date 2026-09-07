@@ -52,7 +52,7 @@ export class GameMap {
   }
 
   canMove(target: Position, runState: RunState): boolean {
-    if (runState.actionPoints <= 0) {
+    if (runState.phase !== 'exploration' || runState.actionPoints <= 0) {
       return false;
     }
 

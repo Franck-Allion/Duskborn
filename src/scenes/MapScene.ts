@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import avatarUrl from '../../assets/avatar1.png';
 import { createInitialRunState } from '../game/core/RunState';
 import { GameMap } from '../game/map/GameMap';
+import { endDay } from '../game/systems/TurnSystem';
 
 const CELL_SIZE = 56;
 const CELL_GAP = 4;
@@ -14,6 +15,8 @@ export class MapScene extends Phaser.Scene {
   private playerImage!: Phaser.GameObjects.Image;
   private dayText!: Phaser.GameObjects.Text;
   private actionsText!: Phaser.GameObjects.Text;
+  private endDayButton!: Phaser.GameObjects.Text;
+  private transitionPanel!: Phaser.GameObjects.Container;
   private startX = 0;
   private startY = 0;
 
@@ -40,12 +43,14 @@ export class MapScene extends Phaser.Scene {
       fontStyle: 'bold',
     });
 
-    this.actionsText = this.add.text(960 - 32, 24, '', {
-      fontSize: '20px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    }).setOrigin(1, 0);
+    this.actionsText = this.add
+      .text(960 - 32, 24, '', {
+        fontSize: '20px',
+        fontFamily: 'monospace',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(1, 0);
 
     this.cells = [];
 
@@ -111,9 +116,74 @@ export class MapScene extends Phaser.Scene {
       .setDisplaySize(CELL_SIZE, CELL_SIZE)
       .setDepth(1);
 
-    // Initial draw of highlights
-    this.refreshAllCellVisuals();
+    this.endDayButton = this.add
+      .text(centerX, 492, 'END DAY', {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        backgroundColor: '#9a3412',
+        padding: { x: 24, y: 12 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        endDay(this.runState);
+        this.refreshPhaseVisuals();
+      });
+
+    this.transitionPanel = this.add
+      .container(centerX, centerY, [
+        this.add
+          .rectangle(0, 0, 440, 144, 0x111827, 0.98)
+          .setStrokeStyle(2, 0xea580c),
+        this.add
+          .text(0, -30, `DAY ${this.runState.day} ENDS`, {
+            fontFamily: 'monospace',
+            fontSize: '28px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+          })
+          .setOrigin(0.5),
+        this.add
+          .text(0, 28, 'The Duskborn approaches.', {
+            fontFamily: 'monospace',
+            fontSize: '20px',
+            color: '#fed7aa',
+          })
+          .setOrigin(0.5),
+      ])
+      .setDepth(2)
+      .setVisible(false);
+
+    this.refreshPhaseVisuals();
     this.updateHUD();
+  }
+
+  private refreshPhaseVisuals(): void {
+    const exploring = this.runState.phase === 'exploration';
+    for (const row of this.cells) {
+      for (const cell of row) {
+        if (exploring) {
+          cell.setInteractive();
+        } else {
+          cell.disableInteractive();
+        }
+      }
+    }
+
+    if (!exploring) {
+      this.endDayButton.disableInteractive().setAlpha(0.4);
+      this.input.setDefaultCursor('default');
+      this.tweens.killTweensOf(this.playerImage);
+      const position = this.map.getPlayerPosition();
+      this.playerImage.setPosition(
+        this.startX + position.x * (CELL_SIZE + CELL_GAP),
+        this.startY + position.y * (CELL_SIZE + CELL_GAP),
+      );
+    }
+    this.transitionPanel.setVisible(!exploring);
+    this.refreshAllCellVisuals();
   }
 
   private updateCellVisuals(x: number, y: number): void {
