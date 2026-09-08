@@ -254,7 +254,7 @@ Create a deliberately small initial roster.
 
 ### Player
 
-* [ ] Create Guardian unit type
+* [x] Create Guardian unit type
 * [ ] Create Archer unit type
 
 ### Duskborn

@@ -3,23 +3,17 @@ import { describe, expect, it } from 'vitest';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
-import type { UnitType } from '../src/game/content/UnitType';
+import { GUARDIAN } from '../src/game/content/unitTypes';
 
 describe('Combat Model Data structures', () => {
-  it('correctly models a UnitType with base characteristics', () => {
-    const guardianType: UnitType = {
+  it('defines Guardian with its initial content values', () => {
+    expect(GUARDIAN).toEqual({
       id: 'guardian',
       name: 'Guardian',
       hpPerUnit: 10,
       baseDamage: 4,
-      abilities: ['shield_wall'],
-    };
-
-    expect(guardianType.id).toBe('guardian');
-    expect(guardianType.name).toBe('Guardian');
-    expect(guardianType.hpPerUnit).toBe(10);
-    expect(guardianType.baseDamage).toBe(4);
-    expect(guardianType.abilities).toEqual(['shield_wall']);
+      abilities: ['strike'],
+    });
   });
 
   it('correctly models a Squad representation with count, health, and positions', () => {
