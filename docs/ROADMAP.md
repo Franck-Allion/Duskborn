@@ -170,7 +170,7 @@ UnitType / Squad / Ability definitions
 ## 0.6.1 Combat Data Model
 
 * [x] Create `UnitType` content definition structure
-* [ ] Create `Squad` model
+* [x] Create `Squad` model
 * [ ] Create `CombatPosition`
 * [ ] Create `CombatState`
 * [ ] Add player hero HP
