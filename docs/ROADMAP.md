@@ -169,7 +169,7 @@ UnitType / Squad / Ability definitions
 
 ## 0.6.1 Combat Data Model
 
-* [ ] Create `UnitType` content definition structure
+* [x] Create `UnitType` content definition structure
 * [ ] Create `Squad` model
 * [ ] Create `CombatPosition`
 * [ ] Create `CombatState`
