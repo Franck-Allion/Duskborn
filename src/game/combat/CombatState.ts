@@ -4,4 +4,5 @@ import type { Squad } from './Squad';
 export interface CombatState {
   playerSquads: Squad[];
   enemySquads: Squad[];
+  playerHeroHp: number;
 }

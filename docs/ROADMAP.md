@@ -173,7 +173,7 @@ UnitType / Squad / Ability definitions
 * [x] Create `Squad` model
 * [x] Create `CombatPosition`
 * [x] Create `CombatState`
-* [ ] Add player hero HP
+* [x] Add player hero HP
 * [ ] Add enemy hero HP
 * [ ] Keep combat models independent from Phaser
 * [ ] Add initial combat model tests
