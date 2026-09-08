@@ -5,4 +5,5 @@ export interface CombatState {
   playerSquads: Squad[];
   enemySquads: Squad[];
   playerHeroHp: number;
+  enemyHeroHp: number;
 }
