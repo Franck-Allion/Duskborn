@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
-import { GUARDIAN } from '../src/game/content/unitTypes';
+import { ARCHER, GUARDIAN } from '../src/game/content/unitTypes';
 
 describe('Combat Model Data structures', () => {
   it('defines Guardian with its initial content values', () => {
@@ -13,6 +13,16 @@ describe('Combat Model Data structures', () => {
       hpPerUnit: 10,
       baseDamage: 4,
       abilities: ['strike'],
+    });
+  });
+
+  it('defines Archer with its initial content values', () => {
+    expect(ARCHER).toEqual({
+      id: 'archer',
+      name: 'Archer',
+      hpPerUnit: 6,
+      baseDamage: 5,
+      abilities: ['shot'],
     });
   });
 
