@@ -176,7 +176,7 @@ UnitType / Squad / Ability definitions
 * [x] Add player hero HP
 * [x] Add enemy hero HP
 * [x] Keep combat models independent from Phaser
-* [ ] Add initial combat model tests
+* [x] Add initial combat model tests
 
 ### UnitType
 
