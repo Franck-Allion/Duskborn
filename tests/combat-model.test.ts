@@ -7,6 +7,7 @@ import {
   getSquadAt,
   isCellOccupied,
   isPlayerDeploymentPosition,
+  isEnemyDeploymentPosition,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
@@ -135,6 +136,18 @@ describe('Combat Model Data structures', () => {
       expect(isPlayerDeploymentPosition({ column: 0, row: 1 })).toBe(false);
       expect(isPlayerDeploymentPosition({ column: -1, row: 2 })).toBe(false);
       expect(isPlayerDeploymentPosition({ column: 6, row: 2 })).toBe(false);
+    });
+
+    it('defines enemy deployment zone with isEnemyDeploymentPosition', () => {
+      expect(isEnemyDeploymentPosition({ column: 0, row: 0 })).toBe(true);
+      expect(isEnemyDeploymentPosition({ column: 5, row: 0 })).toBe(true);
+      expect(isEnemyDeploymentPosition({ column: 0, row: 1 })).toBe(true);
+      expect(isEnemyDeploymentPosition({ column: 5, row: 1 })).toBe(true);
+
+      expect(isEnemyDeploymentPosition({ column: 0, row: 2 })).toBe(false);
+      expect(isEnemyDeploymentPosition({ column: 0, row: 3 })).toBe(false);
+      expect(isEnemyDeploymentPosition({ column: -1, row: 0 })).toBe(false);
+      expect(isEnemyDeploymentPosition({ column: 6, row: 0 })).toBe(false);
     });
 
     it('handles squad lookup and occupancy checks correctly', () => {

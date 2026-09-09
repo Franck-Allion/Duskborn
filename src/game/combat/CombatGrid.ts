@@ -33,6 +33,17 @@ export function isPlayerDeploymentPosition(position: CombatPosition): boolean {
 }
 
 /**
+ * Checks if a given logical position belongs to the enemy's deployment zone.
+ */
+export function isEnemyDeploymentPosition(position: CombatPosition): boolean {
+  return (
+    position.column >= 0 &&
+    position.column < GRID_COLUMNS &&
+    (position.row === ROW_ENEMY_BACK || position.row === ROW_ENEMY_FRONT)
+  );
+}
+
+/**
  * Retrieves the squad occupying a logical cell on the grid, if any.
  * Operates on a list of active squads, maintaining the squad itself as the single source of truth.
  */

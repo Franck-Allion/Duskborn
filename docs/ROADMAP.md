@@ -303,7 +303,7 @@ Success condition:
 * [x] Create pure TypeScript combat grid model
 * [x] Grid size is 6 × 4
 * [x] Define player deployment zone as 6 × 2
-* [ ] Define enemy deployment zone as 6 × 2
+* [x] Define enemy deployment zone as 6 × 2
 * [ ] Prevent invalid positions
 * [ ] Prevent two squads occupying the same cell
 * [ ] Add grid tests
