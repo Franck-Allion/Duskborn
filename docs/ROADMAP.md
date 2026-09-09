@@ -300,7 +300,7 @@ Success condition:
 
 ## 0.6.3 Combat Grid
 
-* [ ] Create pure TypeScript combat grid model
+* [x] Create pure TypeScript combat grid model
 * [ ] Grid size is 6 × 4
 * [ ] Define player deployment zone as 6 × 2
 * [ ] Define enemy deployment zone as 6 × 2

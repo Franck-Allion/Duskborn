@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  isInsideGrid,
+  getSquadAt,
+  isCellOccupied,
+} from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
@@ -100,5 +105,39 @@ describe('Combat Model Data structures', () => {
     expect(combatState.enemySquads[0].unitTypeId).toBe('duskborn_grunt');
     expect(combatState.playerHeroHp).toBe(100);
     expect(combatState.enemyHeroHp).toBe(80);
+  });
+
+  describe('CombatGrid helpers', () => {
+    it('checks boundaries with isInsideGrid', () => {
+      expect(isInsideGrid({ column: 0, row: 0 })).toBe(true);
+      expect(isInsideGrid({ column: 5, row: 3 })).toBe(true);
+      expect(isInsideGrid({ column: -1, row: 0 })).toBe(false);
+      expect(isInsideGrid({ column: 6, row: 0 })).toBe(false);
+      expect(isInsideGrid({ column: 0, row: -1 })).toBe(false);
+      expect(isInsideGrid({ column: 0, row: 4 })).toBe(false);
+    });
+
+    it('handles squad lookup and occupancy checks correctly', () => {
+      const activeSquad: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 2, row: 2 },
+      };
+      const inactiveSquad: Squad = {
+        unitTypeId: 'archer',
+        count: 4,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      const squads = [activeSquad, inactiveSquad];
+
+      expect(getSquadAt({ column: 2, row: 2 }, squads)).toBe(activeSquad);
+      expect(isCellOccupied({ column: 2, row: 2 }, squads)).toBe(true);
+
+      expect(getSquadAt({ column: 0, row: 0 }, squads)).toBeUndefined();
+      expect(isCellOccupied({ column: 0, row: 0 }, squads)).toBe(false);
+    });
   });
 });
