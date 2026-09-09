@@ -8,6 +8,7 @@ import {
   isCellOccupied,
   isPlayerDeploymentPosition,
   isEnemyDeploymentPosition,
+  isValidCombatPosition,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
@@ -126,6 +127,26 @@ describe('Combat Model Data structures', () => {
       expect(isInsideGrid({ column: 0, row: 4 })).toBe(false);
     });
 
+    it('checks logical validity with isValidCombatPosition', () => {
+      // Valid corners
+      expect(isValidCombatPosition({ column: 0, row: 0 })).toBe(true);
+      expect(isValidCombatPosition({ column: 5, row: 0 })).toBe(true);
+      expect(isValidCombatPosition({ column: 0, row: 3 })).toBe(true);
+      expect(isValidCombatPosition({ column: 5, row: 3 })).toBe(true);
+
+      // Invalid columns
+      expect(isValidCombatPosition({ column: -1, row: 0 })).toBe(false);
+      expect(isValidCombatPosition({ column: 6, row: 0 })).toBe(false);
+
+      // Invalid rows
+      expect(isValidCombatPosition({ column: 0, row: -1 })).toBe(false);
+      expect(isValidCombatPosition({ column: 0, row: 4 })).toBe(false);
+
+      // Non-integer coordinates
+      expect(isValidCombatPosition({ column: 1.5, row: 2 })).toBe(false);
+      expect(isValidCombatPosition({ column: 1, row: 2.5 })).toBe(false);
+    });
+
     it('defines player deployment zone with isPlayerDeploymentPosition', () => {
       expect(isPlayerDeploymentPosition({ column: 0, row: 2 })).toBe(true);
       expect(isPlayerDeploymentPosition({ column: 5, row: 2 })).toBe(true);
@@ -136,6 +157,8 @@ describe('Combat Model Data structures', () => {
       expect(isPlayerDeploymentPosition({ column: 0, row: 1 })).toBe(false);
       expect(isPlayerDeploymentPosition({ column: -1, row: 2 })).toBe(false);
       expect(isPlayerDeploymentPosition({ column: 6, row: 2 })).toBe(false);
+      expect(isPlayerDeploymentPosition({ column: 99, row: 2 })).toBe(false);
+      expect(isPlayerDeploymentPosition({ column: 1.5, row: 2 })).toBe(false);
     });
 
     it('defines enemy deployment zone with isEnemyDeploymentPosition', () => {
@@ -148,6 +171,8 @@ describe('Combat Model Data structures', () => {
       expect(isEnemyDeploymentPosition({ column: 0, row: 3 })).toBe(false);
       expect(isEnemyDeploymentPosition({ column: -1, row: 0 })).toBe(false);
       expect(isEnemyDeploymentPosition({ column: 6, row: 0 })).toBe(false);
+      expect(isEnemyDeploymentPosition({ column: 99, row: 0 })).toBe(false);
+      expect(isEnemyDeploymentPosition({ column: 1.5, row: 0 })).toBe(false);
     });
 
     it('handles squad lookup and occupancy checks correctly', () => {

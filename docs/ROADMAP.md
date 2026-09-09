@@ -304,7 +304,7 @@ Success condition:
 * [x] Grid size is 6 × 4
 * [x] Define player deployment zone as 6 × 2
 * [x] Define enemy deployment zone as 6 × 2
-* [ ] Prevent invalid positions
+* [x] Prevent invalid positions
 * [ ] Prevent two squads occupying the same cell
 * [ ] Add grid tests
 * [ ] Render combat grid in CombatScene

@@ -10,10 +10,12 @@ export const ROW_PLAYER_FRONT = 2;
 export const ROW_PLAYER_BACK = 3;
 
 /**
- * Checks if a given logical position lies inside the grid boundaries.
+ * Checks if a given logical position is valid: within 6x4 bounds and has discrete integer coordinates.
  */
-export function isInsideGrid(position: CombatPosition): boolean {
+export function isValidCombatPosition(position: CombatPosition): boolean {
   return (
+    Number.isInteger(position.column) &&
+    Number.isInteger(position.row) &&
     position.column >= 0 &&
     position.column < GRID_COLUMNS &&
     position.row >= 0 &&
@@ -22,12 +24,18 @@ export function isInsideGrid(position: CombatPosition): boolean {
 }
 
 /**
+ * Checks if a given logical position lies inside the grid boundaries.
+ */
+export function isInsideGrid(position: CombatPosition): boolean {
+  return isValidCombatPosition(position);
+}
+
+/**
  * Checks if a given logical position belongs to the player's deployment zone.
  */
 export function isPlayerDeploymentPosition(position: CombatPosition): boolean {
   return (
-    position.column >= 0 &&
-    position.column < GRID_COLUMNS &&
+    isValidCombatPosition(position) &&
     (position.row === ROW_PLAYER_FRONT || position.row === ROW_PLAYER_BACK)
   );
 }
@@ -37,8 +45,7 @@ export function isPlayerDeploymentPosition(position: CombatPosition): boolean {
  */
 export function isEnemyDeploymentPosition(position: CombatPosition): boolean {
   return (
-    position.column >= 0 &&
-    position.column < GRID_COLUMNS &&
+    isValidCombatPosition(position) &&
     (position.row === ROW_ENEMY_BACK || position.row === ROW_ENEMY_FRONT)
   );
 }
