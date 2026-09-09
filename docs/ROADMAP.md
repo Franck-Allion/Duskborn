@@ -340,7 +340,7 @@ Success condition:
 ## 0.6.4 Squad Deployment
 
 * [x] Allow player squads to be positioned before combat
-* [ ] Allow only one squad per unit type
+* [x] Allow only one squad per unit type
 * [ ] Prevent splitting a squad
 * [ ] Restrict player placement to player deployment zone
 * [ ] Place enemy squads using deterministic initial rules

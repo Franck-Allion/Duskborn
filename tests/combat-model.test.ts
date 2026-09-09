@@ -13,7 +13,11 @@ import {
   canPlaceSquadAtPosition,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
-import type { CombatState } from '../src/game/combat/CombatState';
+import {
+  type CombatState,
+  hasDuplicateUnitTypes,
+  isValidCombatState,
+} from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
   ARCHER,
@@ -112,6 +116,79 @@ describe('Combat Model Data structures', () => {
     expect(combatState.enemySquads[0].unitTypeId).toBe('duskborn_grunt');
     expect(combatState.playerHeroHp).toBe(100);
     expect(combatState.enemyHeroHp).toBe(80);
+  });
+
+  it('enforces one squad per unit type on each side using hasDuplicateUnitTypes', () => {
+    const guardianSquad: Squad = {
+      unitTypeId: 'guardian',
+      count: 8,
+      damagedUnitHp: null,
+      position: { column: 0, row: 2 },
+    };
+
+    const archerSquad: Squad = {
+      unitTypeId: 'archer',
+      count: 3,
+      damagedUnitHp: null,
+      position: { column: 1, row: 2 },
+    };
+
+    // Valid: different unit types
+    expect(hasDuplicateUnitTypes([guardianSquad, archerSquad])).toBe(false);
+
+    // Invalid: duplicate unit types
+    const secondGuardianSquad: Squad = {
+      unitTypeId: 'guardian',
+      count: 4,
+      damagedUnitHp: 10,
+      position: { column: 2, row: 3 },
+    };
+    expect(hasDuplicateUnitTypes([guardianSquad, secondGuardianSquad])).toBe(
+      true,
+    );
+
+    // Symmetrical validation of CombatState
+    const state: CombatState = {
+      playerSquads: [guardianSquad, archerSquad],
+      enemySquads: [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 2,
+          damagedUnitHp: null,
+          position: null,
+        },
+      ],
+      playerHeroHp: 100,
+      enemyHeroHp: 100,
+    };
+    expect(isValidCombatState(state)).toBe(true);
+
+    // Duplicate player side
+    const invalidPlayerState: CombatState = {
+      ...state,
+      playerSquads: [guardianSquad, secondGuardianSquad],
+    };
+    expect(isValidCombatState(invalidPlayerState)).toBe(false);
+
+    // Duplicate enemy side
+    const invalidEnemyState: CombatState = {
+      ...state,
+      enemySquads: [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 1,
+          damagedUnitHp: null,
+          position: null,
+        },
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 3,
+          damagedUnitHp: null,
+          position: null,
+        },
+      ],
+    };
+    expect(isValidCombatState(invalidEnemyState)).toBe(false);
   });
 
   describe('CombatGrid helpers', () => {
