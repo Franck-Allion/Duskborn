@@ -7,6 +7,7 @@ import goldIconUrl from '../../assets/icons/gold.png';
 import { createInitialRunState } from '../game/core/RunState';
 import { GameMap } from '../game/map/GameMap';
 import { endDay } from '../game/systems/TurnSystem';
+import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 
 const CELL_SIZE = 56;
 const CELL_GAP = 4;
@@ -44,7 +45,8 @@ export class MapScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { centerX, centerY } = this.cameras.main;
+    const centerX = 480;
+    const centerY = 270;
     const cellStep = CELL_SIZE + CELL_GAP;
     const gridWidth = this.map.width * cellStep - CELL_GAP;
     const gridHeight = this.map.height * cellStep - CELL_GAP;
@@ -228,6 +230,7 @@ export class MapScene extends Phaser.Scene {
 
     this.refreshPhaseVisuals();
     this.updateHUD();
+    fitSceneToCanvas(this);
   }
 
   private refreshPhaseVisuals(): void {

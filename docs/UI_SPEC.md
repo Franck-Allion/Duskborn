@@ -91,7 +91,7 @@ Resource groups have equal spacing and room for four-digit amounts.
 
 Temporary PNG icons are included at `assets/icons/army.png`,
 `assets/icons/mana.png`, and `assets/icons/gold.png`. Replace these files with
-final square PNG artwork (preferably 32x32 with transparency), keeping the same
+final square PNG artwork (preferably 128x128 with transparency), keeping the same
 filenames. Vite imports them and Phaser preloads them under `icon_army`,
 `icon_mana`, and `icon_gold`; no HUD logic changes are needed. Larger square
 sources are scaled to 32x32. Keep the placeholders until replacements are ready,
@@ -423,16 +423,17 @@ This separation is important for testing and future iteration.
 
 ## 15. MVP Visual Style
 
-The game renders at 960x540 with Phaser pixel-art filtering and pixelated canvas
-scaling. It uses the largest whole-number enlargement that fits the window,
-centered with margins. Below 960x540 it shrinks proportionally so all controls
-remain accessible; pixel-perfect scaling is not guaranteed at those small sizes
-or with fractional browser/OS display scaling.
+The game uses a 960x540 logical layout, fitted proportionally to the window and
+centered with margins. The canvas backing size follows the displayed size and
+device pixel ratio, with camera zoom preserving logical coordinates and input.
+Texture filtering and browser smoothing are enabled. Text textures use a higher
+resolution when enlarged, including text inside transition panels. Resizing the
+window updates the canvas, camera, and text resolution.
 
 HUD icons fit inside a 32x32 box while preserving their aspect ratio. For the
-clearest artwork, author icons for 32x32 and the player sprite for 56x56, with
-transparent padding where needed. Existing source artwork is preserved; disabling
-filtering cannot recover details lost when reducing larger images.
+clearest artwork on high-density screens, provide icons at 128x128 and the player
+sprite at 256x256, with transparent padding where needed. Existing source artwork
+is preserved; smoothing does not remove pixel-art styling baked into an image.
 
 For the first iterations:
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import type { RunState } from '../game/core/RunState';
+import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 
 export class CombatScene extends Phaser.Scene {
   private runState!: RunState;
@@ -19,7 +20,8 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    const { centerX, centerY } = this.cameras.main;
+    const centerX = 480;
+    const centerY = 270;
     this.add.text(32, 24, `DAY ${this.runState.day}`, {
       fontFamily: 'monospace',
       fontSize: '20px',
@@ -50,5 +52,6 @@ export class CombatScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
     }
+    fitSceneToCanvas(this);
   }
 }

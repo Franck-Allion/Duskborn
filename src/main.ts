@@ -10,7 +10,8 @@ new Phaser.Game({
   height: 540,
   parent: 'game',
   backgroundColor: '#111827',
-  pixelArt: true,
+  pixelArt: false,
+  antialias: true,
   scene: [MapScene, CombatScene],
   scale: {
     mode: Phaser.Scale.NONE,
@@ -24,8 +25,13 @@ new Phaser.Game({
           parent.clientWidth / 960,
           parent.clientHeight / 540,
         );
-        // Whole-number enlargement; small windows still show the complete game.
-        game.scale.setZoom(fit >= 1 ? Math.floor(fit) : Math.max(fit, 0.01));
+        const density = window.devicePixelRatio || 1;
+        const renderScale = Math.max(fit * density, 0.01);
+        game.scale.resize(
+          Math.round(960 * renderScale),
+          Math.round(540 * renderScale),
+        );
+        game.scale.setZoom(1 / density);
       };
       resize();
       window.addEventListener('resize', resize);
