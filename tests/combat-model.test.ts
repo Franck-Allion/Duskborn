@@ -232,5 +232,37 @@ describe('Combat Model Data structures', () => {
         false,
       );
     });
+
+    it('enforces perfect zone partition (every valid cell belongs to exactly one side)', () => {
+      for (let row = 0; row < GRID_ROWS; row += 1) {
+        for (let col = 0; col < GRID_COLUMNS; col += 1) {
+          const pos = { column: col, row };
+          const isPlayer = isPlayerDeploymentPosition(pos);
+          const isEnemy = isEnemyDeploymentPosition(pos);
+
+          // XOR: must belong to exactly one side, never both, never none
+          expect(isPlayer !== isEnemy).toBe(true);
+        }
+      }
+    });
+
+    it('preserves canonical orientation and row semantics', () => {
+      // Row 0 = Enemy Back, Row 1 = Enemy Front
+      // Row 2 = Player Front, Row 3 = Player Back
+      const posRow0 = { column: 0, row: 0 };
+      const posRow1 = { column: 0, row: 1 };
+      const posRow2 = { column: 0, row: 2 };
+      const posRow3 = { column: 0, row: 3 };
+
+      expect(isEnemyDeploymentPosition(posRow0)).toBe(true);
+      expect(isEnemyDeploymentPosition(posRow1)).toBe(true);
+      expect(isPlayerDeploymentPosition(posRow2)).toBe(true);
+      expect(isPlayerDeploymentPosition(posRow3)).toBe(true);
+
+      expect(isPlayerDeploymentPosition(posRow0)).toBe(false);
+      expect(isPlayerDeploymentPosition(posRow1)).toBe(false);
+      expect(isEnemyDeploymentPosition(posRow2)).toBe(false);
+      expect(isEnemyDeploymentPosition(posRow3)).toBe(false);
+    });
   });
 });
