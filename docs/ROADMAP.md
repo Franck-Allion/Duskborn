@@ -307,7 +307,7 @@ Success condition:
 * [x] Prevent invalid positions
 * [x] Prevent two squads occupying the same cell
 * [x] Add grid tests
-* [ ] Render combat grid in CombatScene
+* [x] Render combat grid in CombatScene
 
 Suggested orientation:
 
