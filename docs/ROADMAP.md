@@ -305,7 +305,7 @@ Success condition:
 * [x] Define player deployment zone as 6 × 2
 * [x] Define enemy deployment zone as 6 × 2
 * [x] Prevent invalid positions
-* [ ] Prevent two squads occupying the same cell
+* [x] Prevent two squads occupying the same cell
 * [ ] Add grid tests
 * [ ] Render combat grid in CombatScene
 

@@ -9,6 +9,8 @@ import {
   isPlayerDeploymentPosition,
   isEnemyDeploymentPosition,
   isValidCombatPosition,
+  isCombatPositionOccupied,
+  canPlaceSquadAtPosition,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
@@ -193,9 +195,42 @@ describe('Combat Model Data structures', () => {
 
       expect(getSquadAt({ column: 2, row: 2 }, squads)).toBe(activeSquad);
       expect(isCellOccupied({ column: 2, row: 2 }, squads)).toBe(true);
+      expect(isCombatPositionOccupied({ column: 2, row: 2 }, squads)).toBe(
+        true,
+      );
+      expect(canPlaceSquadAtPosition({ column: 2, row: 2 }, squads)).toBe(
+        false,
+      );
 
-      expect(getSquadAt({ column: 0, row: 0 }, squads)).toBeUndefined();
-      expect(isCellOccupied({ column: 0, row: 0 }, squads)).toBe(false);
+      expect(getSquadAt({ column: 3, row: 2 }, squads)).toBeUndefined();
+      expect(isCellOccupied({ column: 3, row: 2 }, squads)).toBe(false);
+      expect(isCombatPositionOccupied({ column: 3, row: 2 }, squads)).toBe(
+        false,
+      );
+      expect(canPlaceSquadAtPosition({ column: 3, row: 2 }, squads)).toBe(true);
+
+      expect(getSquadAt({ column: 2, row: 3 }, squads)).toBeUndefined();
+      expect(isCellOccupied({ column: 2, row: 3 }, squads)).toBe(false);
+      expect(isCombatPositionOccupied({ column: 2, row: 3 }, squads)).toBe(
+        false,
+      );
+      expect(canPlaceSquadAtPosition({ column: 2, row: 3 }, squads)).toBe(true);
+
+      // Null position squad does not occupy any cell
+      expect(
+        isCombatPositionOccupied({ column: 0, row: 0 }, [inactiveSquad]),
+      ).toBe(false);
+      expect(
+        canPlaceSquadAtPosition({ column: 0, row: 0 }, [inactiveSquad]),
+      ).toBe(true);
+
+      // Invalid positions are not valid placement destinations
+      expect(isCombatPositionOccupied({ column: 99, row: 2 }, squads)).toBe(
+        false,
+      );
+      expect(canPlaceSquadAtPosition({ column: 99, row: 2 }, squads)).toBe(
+        false,
+      );
     });
   });
 });

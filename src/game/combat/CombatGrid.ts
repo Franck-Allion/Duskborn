@@ -68,10 +68,44 @@ export function getSquadAt(
 
 /**
  * Checks if a given logical position is occupied by any squad.
+ * Only valid combat positions can be occupied. Invalid positions return false.
+ */
+export function isCombatPositionOccupied(
+  position: CombatPosition,
+  squads: readonly Squad[],
+): boolean {
+  if (!isValidCombatPosition(position)) {
+    return false;
+  }
+
+  return squads.some(
+    (s) =>
+      s.position !== null &&
+      s.position.column === position.column &&
+      s.position.row === position.row,
+  );
+}
+
+/**
+ * Checks if a squad can be placed at the given logical position.
+ * It is only allowed if the position is a valid combat position AND not currently occupied.
+ */
+export function canPlaceSquadAtPosition(
+  position: CombatPosition,
+  squads: readonly Squad[],
+): boolean {
+  return (
+    isValidCombatPosition(position) &&
+    !isCombatPositionOccupied(position, squads)
+  );
+}
+
+/**
+ * Checks if a given logical position is occupied by any squad.
  */
 export function isCellOccupied(
   position: CombatPosition,
   squads: Squad[],
 ): boolean {
-  return getSquadAt(position, squads) !== undefined;
+  return isCombatPositionOccupied(position, squads);
 }
