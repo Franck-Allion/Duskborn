@@ -259,7 +259,7 @@ Create a deliberately small initial roster.
 
 ### Duskborn
 
-* [ ] Create Duskborn Brute
+* [x] Create Duskborn Brute
 * [ ] Create Duskborn Archer or equivalent ranged enemy
 
 Each unit type should initially have:

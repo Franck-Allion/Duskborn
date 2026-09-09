@@ -17,3 +17,12 @@ export const ARCHER: UnitType = {
   baseDamage: 5,
   abilities: ['shot'],
 };
+
+/** Initial MVP balance; Strike is an ability ID only, with behavior defined later. */
+export const DUSKBORN_BRUTE: UnitType = {
+  id: 'duskborn-brute',
+  name: 'Duskborn Brute',
+  hpPerUnit: 8,
+  baseDamage: 6,
+  abilities: ['strike'],
+};

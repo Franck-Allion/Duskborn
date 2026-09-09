@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
-import { ARCHER, GUARDIAN } from '../src/game/content/unitTypes';
+import { ARCHER, DUSKBORN_BRUTE, GUARDIAN } from '../src/game/content/unitTypes';
 
 describe('Combat Model Data structures', () => {
   it('defines Guardian with its initial content values', () => {
@@ -23,6 +23,16 @@ describe('Combat Model Data structures', () => {
       hpPerUnit: 6,
       baseDamage: 5,
       abilities: ['shot'],
+    });
+  });
+
+  it('defines Duskborn Brute with its initial content values', () => {
+    expect(DUSKBORN_BRUTE).toEqual({
+      id: 'duskborn-brute',
+      name: 'Duskborn Brute',
+      hpPerUnit: 8,
+      baseDamage: 6,
+      abilities: ['strike'],
     });
   });
 
