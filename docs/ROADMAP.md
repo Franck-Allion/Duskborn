@@ -301,7 +301,7 @@ Success condition:
 ## 0.6.3 Combat Grid
 
 * [x] Create pure TypeScript combat grid model
-* [ ] Grid size is 6 × 4
+* [x] Grid size is 6 × 4
 * [ ] Define player deployment zone as 6 × 2
 * [ ] Define enemy deployment zone as 6 × 2
 * [ ] Prevent invalid positions
@@ -312,23 +312,23 @@ Success condition:
 Suggested orientation:
 
 ```text
-PLAYER
+DUSKBORN / ENEMY SIDE (TOP)
 
-Back row
+Enemy back row (row 0)
 [ ][ ][ ][ ][ ][ ]
 
-Front row
+Enemy front row (row 1)
 [ ][ ][ ][ ][ ][ ]
 
 -------------------
 
-Enemy front row
+Player front row (row 2)
 [ ][ ][ ][ ][ ][ ]
 
-Enemy back row
+Player back row (row 3)
 [ ][ ][ ][ ][ ][ ]
 
-DUSKBORN
+PLAYER SIDE (BOTTOM)
 ```
 
 Success condition:

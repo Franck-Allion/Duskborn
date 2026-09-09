@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  GRID_COLUMNS,
+  GRID_ROWS,
   isInsideGrid,
   getSquadAt,
   isCellOccupied,
@@ -108,6 +110,11 @@ describe('Combat Model Data structures', () => {
   });
 
   describe('CombatGrid helpers', () => {
+    it('defines standard grid dimensions', () => {
+      expect(GRID_COLUMNS).toBe(6);
+      expect(GRID_ROWS).toBe(4);
+    });
+
     it('checks boundaries with isInsideGrid', () => {
       expect(isInsideGrid({ column: 0, row: 0 })).toBe(true);
       expect(isInsideGrid({ column: 5, row: 3 })).toBe(true);
