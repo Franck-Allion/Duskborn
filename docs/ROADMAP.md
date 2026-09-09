@@ -266,7 +266,7 @@ Each unit type should initially have:
 
 * [x] HP per unit
 * [x] base damage
-* [ ] one basic ability
+* [x] one basic ability
 * [ ] optional simple passive if needed
 
 Avoid complex status effects at this stage.
