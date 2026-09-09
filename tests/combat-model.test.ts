@@ -6,6 +6,7 @@ import {
   isInsideGrid,
   getSquadAt,
   isCellOccupied,
+  isPlayerDeploymentPosition,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import type { CombatState } from '../src/game/combat/CombatState';
@@ -122,6 +123,18 @@ describe('Combat Model Data structures', () => {
       expect(isInsideGrid({ column: 6, row: 0 })).toBe(false);
       expect(isInsideGrid({ column: 0, row: -1 })).toBe(false);
       expect(isInsideGrid({ column: 0, row: 4 })).toBe(false);
+    });
+
+    it('defines player deployment zone with isPlayerDeploymentPosition', () => {
+      expect(isPlayerDeploymentPosition({ column: 0, row: 2 })).toBe(true);
+      expect(isPlayerDeploymentPosition({ column: 5, row: 2 })).toBe(true);
+      expect(isPlayerDeploymentPosition({ column: 0, row: 3 })).toBe(true);
+      expect(isPlayerDeploymentPosition({ column: 5, row: 3 })).toBe(true);
+
+      expect(isPlayerDeploymentPosition({ column: 0, row: 0 })).toBe(false);
+      expect(isPlayerDeploymentPosition({ column: 0, row: 1 })).toBe(false);
+      expect(isPlayerDeploymentPosition({ column: -1, row: 2 })).toBe(false);
+      expect(isPlayerDeploymentPosition({ column: 6, row: 2 })).toBe(false);
     });
 
     it('handles squad lookup and occupancy checks correctly', () => {

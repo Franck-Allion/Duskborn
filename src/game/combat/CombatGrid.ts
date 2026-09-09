@@ -22,6 +22,17 @@ export function isInsideGrid(position: CombatPosition): boolean {
 }
 
 /**
+ * Checks if a given logical position belongs to the player's deployment zone.
+ */
+export function isPlayerDeploymentPosition(position: CombatPosition): boolean {
+  return (
+    position.column >= 0 &&
+    position.column < GRID_COLUMNS &&
+    (position.row === ROW_PLAYER_FRONT || position.row === ROW_PLAYER_BACK)
+  );
+}
+
+/**
  * Retrieves the squad occupying a logical cell on the grid, if any.
  * Operates on a list of active squads, maintaining the squad itself as the single source of truth.
  */
