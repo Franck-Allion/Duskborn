@@ -264,10 +264,10 @@ Create a deliberately small initial roster.
 
 Each unit type should initially have:
 
-* HP per unit
-* base damage
-* one basic ability
-* optional simple passive if needed
+* [x] HP per unit
+* [ ] base damage
+* [ ] one basic ability
+* [ ] optional simple passive if needed
 
 Avoid complex status effects at this stage.
 
