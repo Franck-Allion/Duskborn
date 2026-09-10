@@ -253,6 +253,22 @@ No complex cinematic is required.
 
 ## 9. Combat Screen
 
+During deployment, drag a squad from its reserve card onto an empty blue cell,
+or drag a deployed squad directly from one cell to another. Click-to-select then
+click-to-place remains available. A short movement threshold avoids accidental
+drags when clicking.
+
+While dragging, a floating squad label and count follow the pointer. Available
+cells are highlighted; the hovered destination turns green when valid and red
+when occupied or in the enemy zone, with an explanatory message. The logical
+position changes only on a valid release. Invalid drops return the preview to
+its source without changing the squad. Escape, window focus loss, or resizing
+cancel the current drag. Confirmation locks both deployment interaction modes.
+
+Pointer coordinates are converted through the camera, so these interactions
+remain aligned at different window sizes and screen pixel densities. Input
+objects stay alive throughout the gesture; UI rebuilding happens after release.
+
 Initial simple layout:
 
 ```text

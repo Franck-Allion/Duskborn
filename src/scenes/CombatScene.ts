@@ -25,6 +25,10 @@ export class CombatScene extends Phaser.Scene {
 
   private dragPreview: Phaser.GameObjects.Container | null = null;
   private currentDragSquadIndex: number | null = null;
+  private dragPointer: Phaser.Input.Pointer | null = null;
+  private dragSource: Phaser.GameObjects.Rectangle | null = null;
+  private dragSettling = false;
+  private deploymentHint!: Phaser.GameObjects.Text;
 
   constructor() {
     super('combat');
@@ -176,24 +180,25 @@ export class CombatScene extends Phaser.Scene {
         rect.setInteractive({ useHandCursor: true });
         rect.setData('position', position);
 
-        rect.on('pointerdown', () => {
-          this.handleCellClick(position);
-        });
-
-        // Hover effect: when hovering, make border brighter if a squad is selected
-        rect.on('pointerover', () => {
+        rect.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+          const down = this.cameras.main.getWorldPoint(
+            pointer.downX,
+            pointer.downY,
+          );
           if (
-            this.selectedSquadIndex !== null &&
-            !this.combatState.deploymentConfirmed
-          ) {
-            rect.setStrokeStyle(3, 0xffffff); // white thick border on hover
-          }
+            this.currentDragSquadIndex === null &&
+            rect.getBounds().contains(down.x, down.y)
+          )
+            this.handleCellClick(position);
         });
 
+        rect.on('pointerover', () => {
+          if (this.currentDragSquadIndex === null)
+            this.refreshPlacementFeedback(position);
+        });
         rect.on('pointerout', () => {
-          const isPl = isPlayerDeploymentPosition(position);
-          const origStroke = isPl ? 0x2563eb : 0xdc2626;
-          rect.setStrokeStyle(2, origStroke);
+          if (this.currentDragSquadIndex === null)
+            this.refreshPlacementFeedback();
         });
 
         this.cells[row][col] = rect;
@@ -213,97 +218,36 @@ export class CombatScene extends Phaser.Scene {
       )
       .setLineWidth(2);
 
-    // Setup Phaser drag-and-drop input listeners
-    this.input.on(
-      'dragstart',
-      (
-        pointer: Phaser.Input.Pointer,
-        gameObject: Phaser.GameObjects.GameObject,
-      ) => {
-        if (this.combatState.deploymentConfirmed) {
-          return;
-        }
-
-        const squadIndex = gameObject.getData('squadIndex') as
-          number | undefined;
-        if (squadIndex === undefined) {
-          return;
-        }
-
-        this.currentDragSquadIndex = squadIndex;
-        const squad = this.combatState.playerSquads[squadIndex];
-
-        // Create beautiful drag preview following pointer
-        this.dragPreview = this.add.container(pointer.x, pointer.y);
-        const previewBg = this.add
-          .rectangle(0, 0, CELL_SIZE, CELL_SIZE, 0x1d4ed8, 0.4)
-          .setStrokeStyle(2, 0x60a5fa);
-        const previewText = this.add
-          .text(0, 0, squad.unitTypeId === 'guardian' ? 'Guard' : 'Arch', {
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            fontStyle: 'bold',
-            color: '#ffffff',
-          })
-          .setOrigin(0.5);
-
-        this.dragPreview.add([previewBg, previewText]);
-        this.dragPreview.setDepth(100); // ensure it's on top
-
-        // If dragged from grid, subdue original cell text markers during drag
-        const dragType = gameObject.getData('type') as string;
-        if (dragType === 'cell') {
-          // Redraw UI to temporarily hide/subdue dragged squad marker
-          this.refreshDeploymentUI(squadIndex);
-        }
-      },
-    );
-
-    this.input.on('drag', (pointer: Phaser.Input.Pointer) => {
-      if (this.dragPreview) {
-        this.dragPreview.setPosition(pointer.x, pointer.y);
-      }
+    this.deploymentHint = this.add.text(148, 444, '', {
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#cbd5e1',
     });
 
-    this.input.on('dragend', (pointer: Phaser.Input.Pointer) => {
-      if (
-        this.combatState.deploymentConfirmed ||
-        this.currentDragSquadIndex === null
-      ) {
-        return;
-      }
-
-      const squadIndex = this.currentDragSquadIndex;
+    // A small movement threshold separates a click from an intentional drag.
+    this.input.dragDistanceThreshold = 6 * (window.devicePixelRatio || 1);
+    this.input.on('dragstart', this.startSquadDrag, this);
+    this.input.on('drag', this.moveSquadDrag, this);
+    this.input.on('dragend', this.endSquadDrag, this);
+    const cancelDrag = () => this.finishSquadDrag(null);
+    this.input.keyboard?.on('keydown-ESC', cancelDrag);
+    this.game.events.on(Phaser.Core.Events.BLUR, cancelDrag);
+    this.scale.on(Phaser.Scale.Events.RESIZE, cancelDrag);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('dragstart', this.startSquadDrag, this);
+      this.input.off('drag', this.moveSquadDrag, this);
+      this.input.off('dragend', this.endSquadDrag, this);
+      this.input.keyboard?.off('keydown-ESC', cancelDrag);
+      this.game.events.off(Phaser.Core.Events.BLUR, cancelDrag);
+      this.scale.off(Phaser.Scale.Events.RESIZE, cancelDrag);
+      this.dragPreview?.destroy();
+      this.dragPreview = null;
       this.currentDragSquadIndex = null;
-
-      // Clean up drag preview
-      if (this.dragPreview) {
-        this.dragPreview.destroy();
-        this.dragPreview = null;
-      }
-
-      // Identify target logical cell under pointer
-      const targetPos = this.getCellFromPointer(pointer.x, pointer.y);
-
-      if (targetPos) {
-        // Validate placement with our existing single source of truth rules engine
-        if (
-          isValidPlayerPlacement(
-            targetPos,
-            this.combatState.playerSquads,
-            squadIndex,
-          )
-        ) {
-          const squad = this.combatState.playerSquads[squadIndex];
-          squad.position = targetPos;
-          this.selectedSquadIndex = null; // deselect card on successful drop
-        } else {
-          this.cameras.main.shake(100, 0.005); // feedback shake on failed drop
-        }
-      }
-
-      // Redraw UI to restore all cell states and render updated positions
-      this.refreshDeploymentUI();
+      this.dragPointer = null;
+      this.dragSource = null;
+      this.dragSettling = false;
+      this.selectedSquadIndex = null;
+      this.input.setDefaultCursor('default');
     });
 
     // Perform initial UI render of cards & placed squads
@@ -313,11 +257,23 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleCellClick(pos: CombatPosition): void {
-    if (this.combatState.deploymentConfirmed) {
-      return; // deployment confirmed: lock all repositioning
+    if (
+      this.combatState.deploymentConfirmed ||
+      this.currentDragSquadIndex !== null
+    ) {
+      return; // deployment confirmed or drag in progress: lock click placement
     }
 
     if (this.selectedSquadIndex === null) {
+      const index = this.combatState.playerSquads.findIndex(
+        (squad) =>
+          squad.position?.column === pos.column &&
+          squad.position.row === pos.row,
+      );
+      if (index !== -1) {
+        this.selectedSquadIndex = index;
+        this.refreshDeploymentUI();
+      }
       return;
     }
 
@@ -334,7 +290,7 @@ export class CombatScene extends Phaser.Scene {
         this.selectedSquadIndex,
       )
     ) {
-      this.cameras.main.shake(100, 0.005); // feedback for invalid placement
+      this.refreshPlacementFeedback(pos);
       return;
     }
 
@@ -348,7 +304,7 @@ export class CombatScene extends Phaser.Scene {
     this.refreshDeploymentUI();
   }
 
-  private refreshDeploymentUI(draggedSquadIndexToHide?: number): void {
+  private refreshDeploymentUI(): void {
     // 1. Clear old squad markers on grid
     this.squadVisuals.forEach((v) => v.destroy());
     this.squadVisuals = [];
@@ -357,11 +313,27 @@ export class CombatScene extends Phaser.Scene {
     this.availableSquadVisuals.forEach((v) => v.destroy());
     this.availableSquadVisuals = [];
 
+    if (this.combatState.deploymentConfirmed) {
+      this.deploymentHint.setText(
+        'Deployment confirmed. Positions are locked.',
+      );
+    } else if (!this.deploymentHint.text) {
+      this.deploymentHint.setText(
+        'Drag squads onto the blue cells, or click to select and place.',
+      );
+    }
+
     // Reset all grid cell draggability
     for (let r = 0; r < GRID_ROWS; r += 1) {
       for (let c = 0; c < GRID_COLUMNS; c += 1) {
         const cellRect = this.cells[r]?.[c];
         if (cellRect) {
+          cellRect.setAlpha(1);
+          cellRect.setInteractive({
+            cursor: this.combatState.deploymentConfirmed
+              ? 'default'
+              : 'pointer',
+          });
           this.input.setDraggable(cellRect, false);
           cellRect.setData('squadIndex', undefined);
           cellRect.setData('type', undefined);
@@ -376,6 +348,7 @@ export class CombatScene extends Phaser.Scene {
           const { column, row } = squad.position;
           const cellRect = this.cells[row]?.[column];
           if (cellRect) {
+            cellRect.setInteractive({ cursor: 'grab' });
             this.input.setDraggable(cellRect, true);
             cellRect.setData('squadIndex', index);
             cellRect.setData('type', 'cell');
@@ -404,8 +377,8 @@ export class CombatScene extends Phaser.Scene {
     }
 
     // Render player squads
-    this.combatState.playerSquads.forEach((squad, index) => {
-      if (squad.position !== null && index !== draggedSquadIndexToHide) {
+    this.combatState.playerSquads.forEach((squad) => {
+      if (squad.position !== null) {
         const { column, row } = squad.position;
         const screenX = startX + column * (CELL_SIZE + 8) + CELL_SIZE / 2;
         const screenY = getRowY(row);
@@ -507,11 +480,20 @@ export class CombatScene extends Phaser.Scene {
 
       // Card is only interactive before confirmation
       if (!this.combatState.deploymentConfirmed) {
-        bg.setInteractive({ useHandCursor: true, draggable: true });
+        bg.setInteractive({ cursor: 'grab', draggable: true });
         bg.setData('type', 'card');
         bg.setData('squadIndex', index);
 
-        bg.on('pointerdown', () => {
+        bg.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+          const down = this.cameras.main.getWorldPoint(
+            pointer.downX,
+            pointer.downY,
+          );
+          if (
+            this.currentDragSquadIndex !== null ||
+            !bg.getBounds().contains(down.x, down.y)
+          )
+            return;
           if (this.selectedSquadIndex === index) {
             this.selectedSquadIndex = null; // deselect if clicked again
           } else {
@@ -583,6 +565,7 @@ export class CombatScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       btnBg.on('pointerdown', () => {
+        if (this.currentDragSquadIndex !== null) return;
         if (!isDeploymentValid(this.combatState)) {
           this.cameras.main.shake(100, 0.005);
           btnText.setText('Deploy All Squads!');
@@ -639,41 +622,231 @@ export class CombatScene extends Phaser.Scene {
 
       this.confirmButtonVisuals.push(confirmedBg, confirmedText);
     }
+    this.refreshPlacementFeedback();
+    const resolution = Math.max(1, Math.ceil(this.cameras.main.zoom));
+    for (const visual of [
+      ...this.squadVisuals,
+      ...this.availableSquadVisuals,
+      ...this.confirmButtonVisuals,
+    ]) {
+      if (visual instanceof Phaser.GameObjects.Text)
+        visual.setResolution(resolution);
+    }
   }
 
-  /**
-   * Translates absolute screen pointer coordinates to a logical grid cell.
-   * Leverages same layout constants used in rendering to remain fully responsive.
-   */
+  /** Use rendered cell bounds after converting through the camera, including HiDPI zoom. */
   private getCellFromPointer(
-    pointerX: number,
-    pointerY: number,
+    pointer: Phaser.Input.Pointer,
   ): CombatPosition | null {
-    const CELL_SIZE = 64;
-    const CELL_GAP = 8;
-    const startX = 148;
-
-    // Calculate logical column index
-    const col = Math.floor((pointerX - startX) / (CELL_SIZE + CELL_GAP));
-    if (col < 0 || col >= GRID_COLUMNS) {
-      return null;
-    }
-
-    // Verify pointer lies inside actual column rectangle bounds, not inside gap
-    const cellLeft = startX + col * (CELL_SIZE + CELL_GAP);
-    if (pointerX < cellLeft || pointerX > cellLeft + CELL_SIZE) {
-      return null;
-    }
-
-    // Verify pointer lies inside actual row rectangle bounds by checking Y center distances
-    const rowYCenters = [154, 226, 314, 386];
-    for (let r = 0; r < GRID_ROWS; r += 1) {
-      const center = rowYCenters[r];
-      if (Math.abs(pointerY - center) <= CELL_SIZE / 2) {
-        return { column: col, row: r };
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    for (const row of this.cells) {
+      for (const cell of row) {
+        if (cell.getBounds().contains(world.x, world.y)) {
+          return cell.getData('position') as CombatPosition;
+        }
       }
     }
-
     return null;
+  }
+
+  private startSquadDrag(
+    pointer: Phaser.Input.Pointer,
+    source: Phaser.GameObjects.Rectangle,
+  ): void {
+    const index = source.getData('squadIndex') as number | undefined;
+    if (
+      this.combatState.deploymentConfirmed ||
+      this.currentDragSquadIndex !== null ||
+      index === undefined
+    )
+      return;
+
+    this.currentDragSquadIndex = index;
+    this.dragPointer = pointer;
+    this.dragSource = source;
+    this.selectedSquadIndex = null;
+    source.setAlpha(0.35);
+    const sourceBounds = source.getBounds();
+    for (const visual of [
+      ...this.squadVisuals,
+      ...this.availableSquadVisuals,
+    ]) {
+      if (
+        visual instanceof Phaser.GameObjects.Text &&
+        sourceBounds.contains(visual.x, visual.y)
+      ) {
+        visual.setAlpha(0.35);
+      }
+    }
+    this.input.setDefaultCursor('grabbing');
+
+    const squad = this.combatState.playerSquads[index];
+    const previewBg = this.add
+      .rectangle(0, 0, 56, 56, 0x172554, 0.95)
+      .setStrokeStyle(2, 0x93c5fd);
+    const previewText = this.add
+      .text(
+        0,
+        0,
+        `${squad.unitTypeId === 'guardian' ? 'Guard' : 'Arch'}
+x${squad.count}`,
+        {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          align: 'center',
+          resolution: Math.max(1, Math.ceil(this.cameras.main.zoom)),
+        },
+      )
+      .setOrigin(0.5);
+    this.dragPreview = this.add
+      .container(0, 0, [previewBg, previewText])
+      .setDepth(100);
+    // Never destroy or disable the object captured by Phaser while it is dragging.
+    this.moveSquadDrag(pointer);
+  }
+
+  private moveSquadDrag(pointer: Phaser.Input.Pointer): void {
+    if (pointer !== this.dragPointer || this.dragSettling || !this.dragPreview)
+      return;
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    this.dragPreview.setPosition(world.x, world.y);
+    const target = this.getCellFromPointer(pointer);
+    const valid =
+      target !== null &&
+      this.currentDragSquadIndex !== null &&
+      isValidPlayerPlacement(
+        target,
+        this.combatState.playerSquads,
+        this.currentDragSquadIndex,
+      );
+    const previewBg = this.dragPreview.first as Phaser.GameObjects.Rectangle;
+    previewBg.setStrokeStyle(
+      2,
+      target ? (valid ? 0x86efac : 0xfca5a5) : 0x93c5fd,
+    );
+    this.refreshPlacementFeedback(target);
+  }
+
+  private endSquadDrag(pointer: Phaser.Input.Pointer): void {
+    if (pointer !== this.dragPointer) return;
+    this.finishSquadDrag(
+      pointer.event.type === 'touchcancel'
+        ? null
+        : this.getCellFromPointer(pointer),
+    );
+  }
+
+  private finishSquadDrag(target: CombatPosition | null): void {
+    const index = this.currentDragSquadIndex;
+    if (
+      index === null ||
+      this.dragSettling ||
+      !this.dragPreview ||
+      !this.dragSource
+    )
+      return;
+    this.dragSettling = true;
+    const accepted =
+      !this.combatState.deploymentConfirmed &&
+      target !== null &&
+      isValidPlayerPlacement(target, this.combatState.playerSquads, index);
+    const destination = accepted
+      ? this.cells[target.row][target.column]
+      : this.dragSource;
+    if (accepted) this.combatState.playerSquads[index].position = target;
+    this.deploymentHint.setText(
+      accepted
+        ? 'Squad placed. Drag it again to reposition.'
+        : 'Placement cancelled. Squad returned to its original position.',
+    );
+    this.deploymentHint.setColor(accepted ? '#86efac' : '#fca5a5');
+    this.refreshPlacementFeedback();
+    this.input.setDefaultCursor('default');
+
+    // Keep the gesture locked through release so it cannot also trigger click-to-place.
+    this.tweens.add({
+      targets: this.dragPreview,
+      x: destination.x,
+      y: destination.y,
+      alpha: accepted ? 0.3 : 0.6,
+      duration: 120,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.dragPreview?.destroy();
+        this.dragPreview = null;
+        this.dragSource?.setAlpha(1);
+        this.dragSource = null;
+        this.dragPointer = null;
+        this.currentDragSquadIndex = null;
+        this.dragSettling = false;
+        this.refreshDeploymentUI();
+      },
+    });
+  }
+
+  private refreshPlacementFeedback(
+    hovered: CombatPosition | null = null,
+  ): void {
+    const index = this.currentDragSquadIndex ?? this.selectedSquadIndex;
+    for (const row of this.cells) {
+      for (const cell of row) {
+        const position = cell.getData('position') as CombatPosition;
+        const player = isPlayerDeploymentPosition(position);
+        const active =
+          index !== null &&
+          !this.combatState.deploymentConfirmed &&
+          !this.dragSettling;
+        const valid =
+          active &&
+          isValidPlayerPlacement(
+            position,
+            this.combatState.playerSquads,
+            index,
+          );
+        const over =
+          active &&
+          hovered?.column === position.column &&
+          hovered.row === position.row;
+        cell.setFillStyle(
+          over ? (valid ? 0x22c55e : 0xef4444) : player ? 0x1d4ed8 : 0xb91c1c,
+          over ? 0.4 : valid ? 0.28 : 0.15,
+        );
+        cell.setStrokeStyle(
+          over ? 3 : 2,
+          over
+            ? valid
+              ? 0x86efac
+              : 0xfca5a5
+            : valid
+              ? 0x60a5fa
+              : player
+                ? 0x2563eb
+                : 0xdc2626,
+        );
+      }
+    }
+    if (
+      index !== null &&
+      !this.dragSettling &&
+      !this.combatState.deploymentConfirmed
+    ) {
+      const valid =
+        hovered &&
+        isValidPlayerPlacement(hovered, this.combatState.playerSquads, index);
+      this.deploymentHint.setText(
+        hovered
+          ? valid
+            ? this.currentDragSquadIndex !== null
+              ? 'Release to place squad'
+              : 'Click to place squad'
+            : isPlayerDeploymentPosition(hovered)
+              ? 'Cell occupied - choose an empty cell'
+              : 'Deploy in the blue player zone'
+          : 'Drag to a blue cell / Esc to cancel',
+      );
+      this.deploymentHint.setColor(hovered && !valid ? '#fca5a5' : '#cbd5e1');
+    }
   }
 }
