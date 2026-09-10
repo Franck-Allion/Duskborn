@@ -423,7 +423,7 @@ Success condition:
 
 Each column is a combat lane.
 
-* [ ] Implement lane detection
+* [x] Implement lane detection
 * [ ] A squad normally targets the opposing squad in the same column
 * [ ] If both enemy rows are occupied in that column, FRONT is targeted first
 * [ ] If the opposing lane contains no squad, damage goes directly to enemy hero

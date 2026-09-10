@@ -251,3 +251,29 @@ export function getSquadHorizontalCategory(
   }
   return getHorizontalPosition(squad.position);
 }
+
+export type CombatLane = number;
+
+/**
+ * Identifies the logical combat lane (column index) for a given logical position.
+ * Returns null if the position is invalid or out of bounds.
+ */
+export function getLaneForPosition(
+  position: CombatPosition,
+): CombatLane | null {
+  if (!isValidCombatPosition(position)) {
+    return null;
+  }
+  return position.column;
+}
+
+/**
+ * Identifies the logical combat lane of a squad based on its position.
+ * Returns null if the squad is unplaced (position is null).
+ */
+export function getSquadLane(squad: Squad): CombatLane | null {
+  if (squad.position === null) {
+    return null;
+  }
+  return getLaneForPosition(squad.position);
+}

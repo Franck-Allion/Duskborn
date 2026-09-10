@@ -17,6 +17,8 @@ import {
   getSquadDepthCategory,
   getHorizontalPosition,
   getSquadHorizontalCategory,
+  getLaneForPosition,
+  getSquadLane,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -762,6 +764,49 @@ describe('Combat Model Data structures', () => {
 
       expect(getSquadHorizontalCategory(placedPlayer)).toBe('EDGE');
       expect(getSquadHorizontalCategory(unplacedPlayer)).toBeNull();
+    });
+
+    it('identifies logical combat lanes and rejects invalid or unpositioned states', () => {
+      // 1. Table-driven check covering all six columns
+      for (let col = 0; col < GRID_COLUMNS; col += 1) {
+        expect(getLaneForPosition({ column: col, row: 2 })).toBe(col);
+      }
+
+      // 2. Row independence: Y row does not affect lane index
+      expect(getLaneForPosition({ column: 3, row: 0 })).toBe(3);
+      expect(getLaneForPosition({ column: 3, row: 1 })).toBe(3);
+      expect(getLaneForPosition({ column: 3, row: 2 })).toBe(3);
+      expect(getLaneForPosition({ column: 3, row: 3 })).toBe(3);
+
+      // 3. Side/faction independence (player and enemy share identical lanes)
+      const enemyPos = { column: 4, row: 0 }; // Enemy back
+      const playerPos = { column: 4, row: 2 }; // Player front
+      expect(getLaneForPosition(enemyPos)).toBe(4);
+      expect(getLaneForPosition(playerPos)).toBe(4);
+
+      // 4. Reject invalid coordinates
+      expect(getLaneForPosition({ column: -1, row: 2 })).toBeNull();
+      expect(getLaneForPosition({ column: 6, row: 2 })).toBeNull();
+      expect(getLaneForPosition({ column: 0, row: -1 })).toBeNull();
+      expect(getLaneForPosition({ column: 0, row: 4 })).toBeNull();
+      expect(getLaneForPosition({ column: 1.5, row: 2 })).toBeNull();
+
+      // 5. Squad-level helper checks
+      const placedPlayer: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 4, row: 2 },
+      };
+      const unplacedPlayer: Squad = {
+        unitTypeId: 'archer',
+        count: 3,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      expect(getSquadLane(placedPlayer)).toBe(4);
+      expect(getSquadLane(unplacedPlayer)).toBeNull();
     });
   });
 });
