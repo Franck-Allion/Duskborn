@@ -6,6 +6,7 @@ export interface CombatState {
   enemySquads: Squad[];
   playerHeroHp: number;
   enemyHeroHp: number;
+  deploymentConfirmed: boolean;
 }
 
 /**

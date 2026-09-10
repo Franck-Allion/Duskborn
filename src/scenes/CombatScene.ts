@@ -20,6 +20,7 @@ export class CombatScene extends Phaser.Scene {
   private cells: Phaser.GameObjects.Rectangle[][] = [];
   private squadVisuals: Phaser.GameObjects.GameObject[] = [];
   private availableSquadVisuals: Phaser.GameObjects.GameObject[] = [];
+  private confirmButtonVisuals: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('combat');
@@ -65,6 +66,7 @@ export class CombatScene extends Phaser.Scene {
       ]),
       playerHeroHp: 100,
       enemyHeroHp: 100,
+      deploymentConfirmed: false,
     };
 
     // Outer framing box
@@ -176,7 +178,10 @@ export class CombatScene extends Phaser.Scene {
 
         // Hover effect: when hovering, make border brighter if a squad is selected
         rect.on('pointerover', () => {
-          if (this.selectedSquadIndex !== null) {
+          if (
+            this.selectedSquadIndex !== null &&
+            !this.combatState.deploymentConfirmed
+          ) {
             rect.setStrokeStyle(3, 0xffffff); // white thick border on hover
           }
         });
@@ -211,6 +216,10 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private handleCellClick(pos: CombatPosition): void {
+    if (this.combatState.deploymentConfirmed) {
+      return; // deployment confirmed: lock all repositioning
+    }
+
     if (this.selectedSquadIndex === null) {
       return;
     }
@@ -370,17 +379,20 @@ export class CombatScene extends Phaser.Scene {
           cardHeight,
           bgColor,
         )
-        .setStrokeStyle(strokeWidth, strokeColor)
-        .setInteractive({ useHandCursor: true });
+        .setStrokeStyle(strokeWidth, strokeColor);
 
-      bg.on('pointerdown', () => {
-        if (this.selectedSquadIndex === index) {
-          this.selectedSquadIndex = null; // deselect if clicked again
-        } else {
-          this.selectedSquadIndex = index;
-        }
-        this.refreshDeploymentUI();
-      });
+      // Card is only interactive before confirmation
+      if (!this.combatState.deploymentConfirmed) {
+        bg.setInteractive({ useHandCursor: true });
+        bg.on('pointerdown', () => {
+          if (this.selectedSquadIndex === index) {
+            this.selectedSquadIndex = null; // deselect if clicked again
+          } else {
+            this.selectedSquadIndex = index;
+          }
+          this.refreshDeploymentUI();
+        });
+      }
 
       // Name / Count labels
       const displayName =
@@ -408,5 +420,81 @@ export class CombatScene extends Phaser.Scene {
 
       this.availableSquadVisuals.push(bg, titleText, subtitleText);
     });
+
+    // 5. Clean up and render the Confirm Deployment action button
+    this.confirmButtonVisuals.forEach((v) => v.destroy());
+    this.confirmButtonVisuals = [];
+
+    const btnX = sidebarX;
+    const btnY =
+      sidebarY + this.combatState.playerSquads.length * (cardHeight + cardGap);
+    const btnWidth = cardWidth;
+    const btnHeight = 40;
+
+    if (!this.combatState.deploymentConfirmed) {
+      // Interactive Confirm Deployment Button
+      const btnBg = this.add
+        .rectangle(
+          btnX + btnWidth / 2,
+          btnY + btnHeight / 2,
+          btnWidth,
+          btnHeight,
+          0xea580c, // bright orange background
+        )
+        .setStrokeStyle(1, 0xf97316)
+        .setInteractive({ useHandCursor: true });
+
+      const btnText = this.add
+        .text(btnX + btnWidth / 2, btnY + btnHeight / 2, 'Confirm Deployment', {
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+        })
+        .setOrigin(0.5);
+
+      btnBg.on('pointerdown', () => {
+        this.combatState.deploymentConfirmed = true;
+        this.selectedSquadIndex = null;
+        this.refreshDeploymentUI();
+      });
+
+      // Hover visual feedback
+      btnBg.on('pointerover', () => {
+        btnBg.setFillStyle(0xf97316); // lighter orange
+      });
+      btnBg.on('pointerout', () => {
+        btnBg.setFillStyle(0xea580c);
+      });
+
+      this.confirmButtonVisuals.push(btnBg, btnText);
+    } else {
+      // Confirmed State Indicator
+      const confirmedBg = this.add
+        .rectangle(
+          btnX + btnWidth / 2,
+          btnY + btnHeight / 2,
+          btnWidth,
+          btnHeight,
+          0x1f2937, // dark gray background
+        )
+        .setStrokeStyle(1, 0x4b5563);
+
+      const confirmedText = this.add
+        .text(
+          btnX + btnWidth / 2,
+          btnY + btnHeight / 2,
+          'DEPLOYMENT CONFIRMED',
+          {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            fontStyle: 'bold',
+            color: '#9ca3af', // muted gray
+          },
+        )
+        .setOrigin(0.5);
+
+      this.confirmButtonVisuals.push(confirmedBg, confirmedText);
+    }
   }
 }

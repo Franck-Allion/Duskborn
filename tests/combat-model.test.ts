@@ -110,6 +110,7 @@ describe('Combat Model Data structures', () => {
       enemySquads: [enemySquad],
       playerHeroHp: 100,
       enemyHeroHp: 80,
+      deploymentConfirmed: false,
     };
 
     expect(combatState.playerSquads).toHaveLength(1);
@@ -118,6 +119,11 @@ describe('Combat Model Data structures', () => {
     expect(combatState.enemySquads[0].unitTypeId).toBe('duskborn_grunt');
     expect(combatState.playerHeroHp).toBe(100);
     expect(combatState.enemyHeroHp).toBe(80);
+    expect(combatState.deploymentConfirmed).toBe(false);
+
+    // Can transition deploymentConfirmed to true
+    combatState.deploymentConfirmed = true;
+    expect(combatState.deploymentConfirmed).toBe(true);
   });
 
   it('enforces one squad per unit type on each side using hasDuplicateUnitTypes', () => {
@@ -162,6 +168,7 @@ describe('Combat Model Data structures', () => {
       ],
       playerHeroHp: 100,
       enemyHeroHp: 100,
+      deploymentConfirmed: false,
     };
     expect(isValidCombatState(state)).toBe(true);
 
