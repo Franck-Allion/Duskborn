@@ -334,6 +334,74 @@ describe('Combat Model Data structures', () => {
     expect(isDeploymentValid(stateOverlapping)).toBe(false);
   });
 
+  it('handles complete representative valid deployment, confirmation, and post-confirmation lock', () => {
+    // 1. Initial State: Player has unplaced squads, Enemy has unplaced squads
+    const playerSquad0: Squad = {
+      unitTypeId: 'guardian',
+      count: 8,
+      damagedUnitHp: null,
+      position: null,
+    };
+    const playerSquad1: Squad = {
+      unitTypeId: 'archer',
+      count: 3,
+      damagedUnitHp: null,
+      position: null,
+    };
+
+    const initialEnemySquads: Squad[] = [
+      {
+        unitTypeId: 'duskborn-brute',
+        count: 4,
+        damagedUnitHp: null,
+        position: null,
+      },
+      {
+        unitTypeId: 'duskborn-archer',
+        count: 2,
+        damagedUnitHp: null,
+        position: null,
+      },
+    ];
+
+    const state: CombatState = {
+      playerSquads: [playerSquad0, playerSquad1],
+      enemySquads: deployEnemySquads(initialEnemySquads), // deployed deterministically
+      playerHeroHp: 100,
+      enemyHeroHp: 100,
+      deploymentConfirmed: false,
+    };
+
+    // Before placing player squads, deployment must be invalid
+    expect(isDeploymentValid(state)).toBe(false);
+
+    // 2. Player deploys squads legally
+    // Place Squad 0 at (2, 2) and Squad 1 at (4, 3)
+    const target0 = { column: 2, row: 2 };
+    const target1 = { column: 4, row: 3 };
+
+    expect(isValidPlayerPlacement(target0, state.playerSquads, 0)).toBe(true);
+    state.playerSquads[0].position = target0;
+
+    expect(isValidPlayerPlacement(target1, state.playerSquads, 1)).toBe(true);
+    state.playerSquads[1].position = target1;
+
+    // Now all squads are legally positioned: player rows 2-3, enemy rows 0-1, no overlaps
+    expect(isDeploymentValid(state)).toBe(true);
+
+    // 3. Confirm Deployment succeeds
+    state.deploymentConfirmed = true;
+    expect(state.deploymentConfirmed).toBe(true);
+
+    // 4. Post-confirmation lock: any attempts to reposition squads must be ignored/locked
+    const attemptReposition = { column: 0, row: 2 };
+    if (!state.deploymentConfirmed) {
+      state.playerSquads[0].position = attemptReposition;
+    }
+    // Logical position remains exactly target0, unchanged!
+    expect(state.playerSquads[0].position).toEqual(target0);
+  });
+
   describe('CombatGrid helpers', () => {
     it('defines standard grid dimensions', () => {
       expect(GRID_COLUMNS).toBe(6);

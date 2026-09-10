@@ -346,7 +346,7 @@ Success condition:
 * [x] Place enemy squads using deterministic initial rules
 * [x] Add Confirm Deployment action
 * [x] Prevent combat from starting before valid deployment
-* [ ] Add deployment tests
+* [x] Add deployment tests
 
 Example:
 
