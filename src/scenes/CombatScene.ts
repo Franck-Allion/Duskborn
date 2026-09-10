@@ -23,6 +23,9 @@ export class CombatScene extends Phaser.Scene {
   private availableSquadVisuals: Phaser.GameObjects.GameObject[] = [];
   private confirmButtonVisuals: Phaser.GameObjects.GameObject[] = [];
 
+  private dragPreview: Phaser.GameObjects.Container | null = null;
+  private currentDragSquadIndex: number | null = null;
+
   constructor() {
     super('combat');
   }
@@ -210,6 +213,99 @@ export class CombatScene extends Phaser.Scene {
       )
       .setLineWidth(2);
 
+    // Setup Phaser drag-and-drop input listeners
+    this.input.on(
+      'dragstart',
+      (
+        pointer: Phaser.Input.Pointer,
+        gameObject: Phaser.GameObjects.GameObject,
+      ) => {
+        if (this.combatState.deploymentConfirmed) {
+          return;
+        }
+
+        const squadIndex = gameObject.getData('squadIndex') as
+          number | undefined;
+        if (squadIndex === undefined) {
+          return;
+        }
+
+        this.currentDragSquadIndex = squadIndex;
+        const squad = this.combatState.playerSquads[squadIndex];
+
+        // Create beautiful drag preview following pointer
+        this.dragPreview = this.add.container(pointer.x, pointer.y);
+        const previewBg = this.add
+          .rectangle(0, 0, CELL_SIZE, CELL_SIZE, 0x1d4ed8, 0.4)
+          .setStrokeStyle(2, 0x60a5fa);
+        const previewText = this.add
+          .text(0, 0, squad.unitTypeId === 'guardian' ? 'Guard' : 'Arch', {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+          })
+          .setOrigin(0.5);
+
+        this.dragPreview.add([previewBg, previewText]);
+        this.dragPreview.setDepth(100); // ensure it's on top
+
+        // If dragged from grid, subdue original cell text markers during drag
+        const dragType = gameObject.getData('type') as string;
+        if (dragType === 'cell') {
+          // Redraw UI to temporarily hide/subdue dragged squad marker
+          this.refreshDeploymentUI(squadIndex);
+        }
+      },
+    );
+
+    this.input.on('drag', (pointer: Phaser.Input.Pointer) => {
+      if (this.dragPreview) {
+        this.dragPreview.setPosition(pointer.x, pointer.y);
+      }
+    });
+
+    this.input.on('dragend', (pointer: Phaser.Input.Pointer) => {
+      if (
+        this.combatState.deploymentConfirmed ||
+        this.currentDragSquadIndex === null
+      ) {
+        return;
+      }
+
+      const squadIndex = this.currentDragSquadIndex;
+      this.currentDragSquadIndex = null;
+
+      // Clean up drag preview
+      if (this.dragPreview) {
+        this.dragPreview.destroy();
+        this.dragPreview = null;
+      }
+
+      // Identify target logical cell under pointer
+      const targetPos = this.getCellFromPointer(pointer.x, pointer.y);
+
+      if (targetPos) {
+        // Validate placement with our existing single source of truth rules engine
+        if (
+          isValidPlayerPlacement(
+            targetPos,
+            this.combatState.playerSquads,
+            squadIndex,
+          )
+        ) {
+          const squad = this.combatState.playerSquads[squadIndex];
+          squad.position = targetPos;
+          this.selectedSquadIndex = null; // deselect card on successful drop
+        } else {
+          this.cameras.main.shake(100, 0.005); // feedback shake on failed drop
+        }
+      }
+
+      // Redraw UI to restore all cell states and render updated positions
+      this.refreshDeploymentUI();
+    });
+
     // Perform initial UI render of cards & placed squads
     this.refreshDeploymentUI();
 
@@ -252,7 +348,7 @@ export class CombatScene extends Phaser.Scene {
     this.refreshDeploymentUI();
   }
 
-  private refreshDeploymentUI(): void {
+  private refreshDeploymentUI(draggedSquadIndexToHide?: number): void {
     // 1. Clear old squad markers on grid
     this.squadVisuals.forEach((v) => v.destroy());
     this.squadVisuals = [];
@@ -261,7 +357,34 @@ export class CombatScene extends Phaser.Scene {
     this.availableSquadVisuals.forEach((v) => v.destroy());
     this.availableSquadVisuals = [];
 
-    // 3. Render squad markers on grid for placed squads
+    // Reset all grid cell draggability
+    for (let r = 0; r < GRID_ROWS; r += 1) {
+      for (let c = 0; c < GRID_COLUMNS; c += 1) {
+        const cellRect = this.cells[r]?.[c];
+        if (cellRect) {
+          this.input.setDraggable(cellRect, false);
+          cellRect.setData('squadIndex', undefined);
+          cellRect.setData('type', undefined);
+        }
+      }
+    }
+
+    // Configure draggability of cells containing player squads (if before confirmation)
+    if (!this.combatState.deploymentConfirmed) {
+      this.combatState.playerSquads.forEach((squad, index) => {
+        if (squad.position !== null) {
+          const { column, row } = squad.position;
+          const cellRect = this.cells[row]?.[column];
+          if (cellRect) {
+            this.input.setDraggable(cellRect, true);
+            cellRect.setData('squadIndex', index);
+            cellRect.setData('type', 'cell');
+          }
+        }
+      });
+    }
+
+    // 3. Render squad markers on grid for placed squads (skip drawing lifted squad)
     const startX = 480 - 120 - (6 * 64 + 5 * 8) / 2; // 148
     const startY = 122;
     const CELL_SIZE = 64;
@@ -281,8 +404,8 @@ export class CombatScene extends Phaser.Scene {
     }
 
     // Render player squads
-    this.combatState.playerSquads.forEach((squad) => {
-      if (squad.position !== null) {
+    this.combatState.playerSquads.forEach((squad, index) => {
+      if (squad.position !== null && index !== draggedSquadIndexToHide) {
         const { column, row } = squad.position;
         const screenX = startX + column * (CELL_SIZE + 8) + CELL_SIZE / 2;
         const screenY = getRowY(row);
@@ -384,7 +507,10 @@ export class CombatScene extends Phaser.Scene {
 
       // Card is only interactive before confirmation
       if (!this.combatState.deploymentConfirmed) {
-        bg.setInteractive({ useHandCursor: true });
+        bg.setInteractive({ useHandCursor: true, draggable: true });
+        bg.setData('type', 'card');
+        bg.setData('squadIndex', index);
+
         bg.on('pointerdown', () => {
           if (this.selectedSquadIndex === index) {
             this.selectedSquadIndex = null; // deselect if clicked again
@@ -393,6 +519,8 @@ export class CombatScene extends Phaser.Scene {
           }
           this.refreshDeploymentUI();
         });
+
+        this.input.setDraggable(bg, true);
       }
 
       // Name / Count labels
@@ -511,5 +639,41 @@ export class CombatScene extends Phaser.Scene {
 
       this.confirmButtonVisuals.push(confirmedBg, confirmedText);
     }
+  }
+
+  /**
+   * Translates absolute screen pointer coordinates to a logical grid cell.
+   * Leverages same layout constants used in rendering to remain fully responsive.
+   */
+  private getCellFromPointer(
+    pointerX: number,
+    pointerY: number,
+  ): CombatPosition | null {
+    const CELL_SIZE = 64;
+    const CELL_GAP = 8;
+    const startX = 148;
+
+    // Calculate logical column index
+    const col = Math.floor((pointerX - startX) / (CELL_SIZE + CELL_GAP));
+    if (col < 0 || col >= GRID_COLUMNS) {
+      return null;
+    }
+
+    // Verify pointer lies inside actual column rectangle bounds, not inside gap
+    const cellLeft = startX + col * (CELL_SIZE + CELL_GAP);
+    if (pointerX < cellLeft || pointerX > cellLeft + CELL_SIZE) {
+      return null;
+    }
+
+    // Verify pointer lies inside actual row rectangle bounds by checking Y center distances
+    const rowYCenters = [154, 226, 314, 386];
+    for (let r = 0; r < GRID_ROWS; r += 1) {
+      const center = rowYCenters[r];
+      if (Math.abs(pointerY - center) <= CELL_SIZE / 2) {
+        return { column: col, row: r };
+      }
+    }
+
+    return null;
   }
 }
