@@ -19,6 +19,7 @@ import {
   type CombatState,
   hasDuplicateUnitTypes,
   isValidCombatState,
+  isDeploymentValid,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -237,6 +238,100 @@ describe('Combat Model Data structures', () => {
     expect(injuredSquad.unitTypeId).toBe('archer');
     expect(injuredSquad.damagedUnitHp).toBe(7);
     expect(injuredSquad.position).toEqual({ column: 5, row: 3 });
+  });
+
+  it('validates entire deployment state with isDeploymentValid', () => {
+    // Legally positioned player squad (row 2)
+    const playerSquad: Squad = {
+      unitTypeId: 'guardian',
+      count: 8,
+      damagedUnitHp: null,
+      position: { column: 2, row: 2 },
+    };
+
+    // Legally positioned enemy squad (row 1)
+    const enemySquad: Squad = {
+      unitTypeId: 'brute',
+      count: 5,
+      damagedUnitHp: null,
+      position: { column: 3, row: 1 },
+    };
+
+    const state: CombatState = {
+      playerSquads: [playerSquad],
+      enemySquads: [enemySquad],
+      playerHeroHp: 100,
+      enemyHeroHp: 100,
+      deploymentConfirmed: false,
+    };
+
+    // 1. All positioned legally => valid
+    expect(isDeploymentValid(state)).toBe(true);
+
+    // 2. Unpositioned active player squad => invalid
+    const unpositionedPlayer: Squad = {
+      unitTypeId: 'archer',
+      count: 3,
+      damagedUnitHp: null,
+      position: null,
+    };
+    const stateWithUnplaced = {
+      ...state,
+      playerSquads: [playerSquad, unpositionedPlayer],
+    };
+    expect(isDeploymentValid(stateWithUnplaced)).toBe(false);
+
+    // 3. Unpositioned DEAD player squad (count <= 0) => does NOT block validation
+    const deadPlayer: Squad = {
+      unitTypeId: 'archer',
+      count: 0,
+      damagedUnitHp: null,
+      position: null,
+    };
+    const stateWithDead = {
+      ...state,
+      playerSquads: [playerSquad, deadPlayer],
+    };
+    expect(isDeploymentValid(stateWithDead)).toBe(true);
+
+    // 4. Player squad in enemy deployment zone (row 1) => invalid
+    const playerInEnemyZone: Squad = {
+      unitTypeId: 'guardian',
+      count: 8,
+      damagedUnitHp: null,
+      position: { column: 2, row: 1 },
+    };
+    const statePlayerInEnemyZone = {
+      ...state,
+      playerSquads: [playerInEnemyZone],
+    };
+    expect(isDeploymentValid(statePlayerInEnemyZone)).toBe(false);
+
+    // 5. Enemy squad in player deployment zone (row 2) => invalid
+    const enemyInPlayerZone: Squad = {
+      unitTypeId: 'brute',
+      count: 5,
+      damagedUnitHp: null,
+      position: { column: 3, row: 2 },
+    };
+    const stateEnemyInPlayerZone = {
+      ...state,
+      enemySquads: [enemyInPlayerZone],
+    };
+    expect(isDeploymentValid(stateEnemyInPlayerZone)).toBe(false);
+
+    // 6. Duplicate cell occupancy (e.g. player and enemy squad on same cell) => invalid
+    const overlappingEnemy: Squad = {
+      unitTypeId: 'brute',
+      count: 5,
+      damagedUnitHp: null,
+      position: { column: 2, row: 2 }, // overlaps playerSquad
+    };
+    const stateOverlapping = {
+      ...state,
+      enemySquads: [overlappingEnemy],
+    };
+    expect(isDeploymentValid(stateOverlapping)).toBe(false);
   });
 
   describe('CombatGrid helpers', () => {

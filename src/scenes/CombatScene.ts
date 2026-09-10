@@ -9,6 +9,7 @@ import {
 } from '../game/combat/CombatGrid';
 import type { CombatPosition } from '../game/combat/CombatPosition';
 import type { CombatState } from '../game/combat/CombatState';
+import { isDeploymentValid } from '../game/combat/CombatState';
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 
@@ -454,6 +455,20 @@ export class CombatScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       btnBg.on('pointerdown', () => {
+        if (!isDeploymentValid(this.combatState)) {
+          this.cameras.main.shake(100, 0.005);
+          btnText.setText('Deploy All Squads!');
+          btnText.setColor('#f87171'); // red warning text
+          // Revert button text after 1.5 seconds
+          this.time.delayedCall(1500, () => {
+            if (!this.combatState.deploymentConfirmed && btnText.active) {
+              btnText.setText('Confirm Deployment');
+              btnText.setColor('#ffffff');
+            }
+          });
+          return;
+        }
+
         this.combatState.deploymentConfirmed = true;
         this.selectedSquadIndex = null;
         this.refreshDeploymentUI();

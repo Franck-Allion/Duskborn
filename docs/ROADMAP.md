@@ -345,7 +345,7 @@ Success condition:
 * [x] Restrict player placement to player deployment zone
 * [x] Place enemy squads using deterministic initial rules
 * [x] Add Confirm Deployment action
-* [ ] Prevent combat from starting before valid deployment
+* [x] Prevent combat from starting before valid deployment
 * [ ] Add deployment tests
 
 Example:
