@@ -12,6 +12,7 @@ import {
   isCombatPositionOccupied,
   canPlaceSquadAtPosition,
   isValidPlayerPlacement,
+  deployEnemySquads,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -399,6 +400,72 @@ describe('Combat Model Data structures', () => {
       expect(
         isValidPlayerPlacement({ column: 1.5, row: 2 }, playerSquads, 1),
       ).toBe(false);
+    });
+
+    it('deploys enemy squads deterministically, front-row first, left-to-right', () => {
+      // 1. One squad: gets placed at (0, 1)
+      const squads1: Squad[] = [
+        { unitTypeId: 'brute', count: 1, damagedUnitHp: null, position: null },
+      ];
+      const res1 = deployEnemySquads(squads1);
+      expect(res1[0].position).toEqual({ column: 0, row: 1 });
+
+      // 2. Two squads: get placed at (0, 1) and (1, 1)
+      const squads2: Squad[] = [
+        { unitTypeId: 'brute', count: 1, damagedUnitHp: null, position: null },
+        { unitTypeId: 'archer', count: 1, damagedUnitHp: null, position: null },
+      ];
+      const res2 = deployEnemySquads(squads2);
+      expect(res2[0].position).toEqual({ column: 0, row: 1 });
+      expect(res2[1].position).toEqual({ column: 1, row: 1 });
+
+      // 3. Six squads: fill row 1 (Enemy Front) completely
+      const squads6 = Array.from({ length: 6 }, (_, i) => ({
+        unitTypeId: `enemy-${i}`,
+        count: 1,
+        damagedUnitHp: null,
+        position: null,
+      }));
+      const res6 = deployEnemySquads(squads6);
+      for (let i = 0; i < 6; i += 1) {
+        expect(res6[i].position).toEqual({ column: i, row: 1 });
+      }
+
+      // 4. Seven squads: seventh squad wraps onto row 0 (Enemy Back)
+      const squads7 = Array.from({ length: 7 }, (_, i) => ({
+        unitTypeId: `enemy-${i}`,
+        count: 1,
+        damagedUnitHp: null,
+        position: null,
+      }));
+      const res7 = deployEnemySquads(squads7);
+      for (let i = 0; i < 6; i += 1) {
+        expect(res7[i].position).toEqual({ column: i, row: 1 });
+      }
+      expect(res7[6].position).toEqual({ column: 0, row: 0 });
+
+      // 5. Running twice produces the exact same deterministic output
+      const res7_again = deployEnemySquads(squads7);
+      expect(res7).toEqual(res7_again);
+
+      // 6. Preserves existing valid positions
+      const prePositioned: Squad[] = [
+        {
+          unitTypeId: 'pre',
+          count: 1,
+          damagedUnitHp: null,
+          position: { column: 3, row: 1 },
+        },
+        {
+          unitTypeId: 'unplaced',
+          count: 1,
+          damagedUnitHp: null,
+          position: null,
+        },
+      ];
+      const resPre = deployEnemySquads(prePositioned);
+      expect(resPre[0].position).toEqual({ column: 3, row: 1 }); // unchanged
+      expect(resPre[1].position).toEqual({ column: 0, row: 1 }); // first available empty slot
     });
 
     it('enforces perfect zone partition (every valid cell belongs to exactly one side)', () => {

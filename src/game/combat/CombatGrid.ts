@@ -128,3 +128,54 @@ export function isValidPlayerPlacement(
   );
   return !isCombatPositionOccupied(position, otherSquads);
 }
+
+/**
+ * Deterministically deploys a list of enemy squads onto the grid.
+ * Processes them in array order, filling the Front row (row 1) from left to right (col 0 to 5),
+ * and then the Back row (row 0) from left to right (col 0 to 5).
+ * Squads that already have valid enemy-zone positions are left unchanged.
+ */
+export function deployEnemySquads(enemySquads: readonly Squad[]): Squad[] {
+  // Candidate positions in order of priority:
+  // Front row (row 1, cols 0..5) first, then Back row (row 0, cols 0..5)
+  const candidates: CombatPosition[] = [];
+  for (let col = 0; col < GRID_COLUMNS; col += 1) {
+    candidates.push({ column: col, row: ROW_ENEMY_FRONT });
+  }
+  for (let col = 0; col < GRID_COLUMNS; col += 1) {
+    candidates.push({ column: col, row: ROW_ENEMY_BACK });
+  }
+
+  // Identify which candidate positions are already occupied by squads that already have a valid position.
+  const activePositions = enemySquads
+    .filter((s) => s.position !== null && isEnemyDeploymentPosition(s.position))
+    .map((s) => s.position as CombatPosition);
+
+  const occupiedPositions = new Set<string>(
+    activePositions.map((p) => `${p.column},${p.row}`),
+  );
+
+  // Available candidates are those not already occupied
+  const availableCandidates = candidates.filter(
+    (c) => !occupiedPositions.has(`${c.column},${c.row}`),
+  );
+
+  let nextCandidateIdx = 0;
+
+  return enemySquads.map((squad) => {
+    // If the squad already has a valid position, keep it
+    if (squad.position !== null && isEnemyDeploymentPosition(squad.position)) {
+      return { ...squad };
+    }
+
+    // Otherwise, assign the next available deterministic candidate
+    if (nextCandidateIdx < availableCandidates.length) {
+      const position = availableCandidates[nextCandidateIdx];
+      nextCandidateIdx += 1;
+      return { ...squad, position };
+    }
+
+    // If we exceed capacity (more than 12 squads), leave position as null
+    return { ...squad };
+  });
+}

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import {
   isPlayerDeploymentPosition,
   isValidPlayerPlacement,
+  deployEnemySquads,
   GRID_COLUMNS,
   GRID_ROWS,
 } from '../game/combat/CombatGrid';
@@ -37,7 +38,7 @@ export class CombatScene extends Phaser.Scene {
     const centerX = 480;
     const centerY = 270;
 
-    // Initialize the mutable CombatState for this battle with unpositioned player squads
+    // Initialize the mutable CombatState for this battle with unpositioned player squads and deterministically deployed enemy squads
     this.combatState = {
       playerSquads: [
         {
@@ -48,7 +49,20 @@ export class CombatScene extends Phaser.Scene {
         },
         { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
       ],
-      enemySquads: [], // enemy placement handled by later steps
+      enemySquads: deployEnemySquads([
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: null,
+        },
+        {
+          unitTypeId: 'duskborn-archer',
+          count: 2,
+          damagedUnitHp: null,
+          position: null,
+        },
+      ]),
       playerHeroHp: 100,
       enemyHeroHp: 100,
     };
@@ -256,6 +270,7 @@ export class CombatScene extends Phaser.Scene {
       );
     }
 
+    // Render player squads
     this.combatState.playerSquads.forEach((squad) => {
       if (squad.position !== null) {
         const { column, row } = squad.position;
@@ -283,6 +298,41 @@ export class CombatScene extends Phaser.Scene {
             fontFamily: 'monospace',
             fontSize: '12px',
             color: '#60a5fa', // blue-400
+          })
+          .setOrigin(0.5);
+
+        this.squadVisuals.push(nameText, countText);
+      }
+    });
+
+    // Render enemy squads symmetrically
+    this.combatState.enemySquads.forEach((squad) => {
+      if (squad.position !== null) {
+        const { column, row } = squad.position;
+        const screenX = startX + column * (CELL_SIZE + 8) + CELL_SIZE / 2;
+        const screenY = getRowY(row);
+
+        // Name text
+        const nameText = this.add
+          .text(
+            screenX,
+            screenY - 10,
+            squad.unitTypeId === 'duskborn-brute' ? 'Brut' : 'Arch',
+            {
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              fontStyle: 'bold',
+              color: '#ffffff',
+            },
+          )
+          .setOrigin(0.5);
+
+        // Count text
+        const countText = this.add
+          .text(screenX, screenY + 10, `x${squad.count}`, {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            color: '#f87171', // red-400
           })
           .setOrigin(0.5);
 
