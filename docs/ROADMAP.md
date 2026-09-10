@@ -394,7 +394,7 @@ CENTER
 * [x] Detect whether a squad is FRONT or BACK
 * [x] Detect whether a squad is EDGE or CENTER
 * [x] Keep position rules independent from Phaser
-* [ ] Add position tests
+* [x] Add position tests
 
 Avoid adding many exact-cell-specific bonuses.
 

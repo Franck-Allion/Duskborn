@@ -691,6 +691,7 @@ describe('Combat Model Data structures', () => {
       // 2. Reject invalid coordinates
       expect(getDepthPosition({ column: -1, row: 2 }, 'player')).toBeNull();
       expect(getDepthPosition({ column: 6, row: 2 }, 'player')).toBeNull();
+      expect(getDepthPosition({ column: 0, row: -1 }, 'player')).toBeNull();
       expect(getDepthPosition({ column: 0, row: 4 }, 'player')).toBeNull();
       expect(getDepthPosition({ column: 1.5, row: 2 }, 'player')).toBeNull();
 
@@ -741,6 +742,7 @@ describe('Combat Model Data structures', () => {
       // 3. Reject invalid coordinates
       expect(getHorizontalPosition({ column: -1, row: 2 })).toBeNull();
       expect(getHorizontalPosition({ column: 6, row: 2 })).toBeNull();
+      expect(getHorizontalPosition({ column: 0, row: -1 })).toBeNull();
       expect(getHorizontalPosition({ column: 0, row: 4 })).toBeNull();
       expect(getHorizontalPosition({ column: 1.5, row: 2 })).toBeNull();
 
