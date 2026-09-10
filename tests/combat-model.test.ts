@@ -191,6 +191,45 @@ describe('Combat Model Data structures', () => {
     expect(isValidCombatState(invalidEnemyState)).toBe(false);
   });
 
+  it('preserves squad integrity and prevents squad splitting during deployment', () => {
+    // 1. Initial state: squad has count=8, position=null, damagedUnitHp=null
+    const squad: Squad = {
+      unitTypeId: 'guardian',
+      count: 8,
+      damagedUnitHp: null,
+      position: null,
+    };
+
+    // 2. Deploy to cell: position becomes (2,2). count, unitTypeId and damagedUnitHp must be preserved.
+    squad.position = { column: 2, row: 2 };
+    expect(squad.count).toBe(8);
+    expect(squad.unitTypeId).toBe('guardian');
+    expect(squad.damagedUnitHp).toBeNull();
+    expect(squad.position).toEqual({ column: 2, row: 2 });
+
+    // 3. Reposition to another cell: position becomes (3,3). count, unitTypeId and damagedUnitHp are preserved.
+    squad.position = { column: 3, row: 3 };
+    expect(squad.count).toBe(8);
+    expect(squad.unitTypeId).toBe('guardian');
+    expect(squad.damagedUnitHp).toBeNull();
+    expect(squad.position).toEqual({ column: 3, row: 3 });
+
+    // 4. Reposition with partial HP: squad has count=6, damagedUnitHp=7
+    const injuredSquad: Squad = {
+      unitTypeId: 'archer',
+      count: 6,
+      damagedUnitHp: 7,
+      position: { column: 1, row: 2 },
+    };
+
+    // Reposition to (5,3)
+    injuredSquad.position = { column: 5, row: 3 };
+    expect(injuredSquad.count).toBe(6);
+    expect(injuredSquad.unitTypeId).toBe('archer');
+    expect(injuredSquad.damagedUnitHp).toBe(7);
+    expect(injuredSquad.position).toEqual({ column: 5, row: 3 });
+  });
+
   describe('CombatGrid helpers', () => {
     it('defines standard grid dimensions', () => {
       expect(GRID_COLUMNS).toBe(6);
