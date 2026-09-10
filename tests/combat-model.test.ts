@@ -13,6 +13,8 @@ import {
   canPlaceSquadAtPosition,
   isValidPlayerPlacement,
   deployEnemySquads,
+  getDepthPosition,
+  getSquadDepthCategory,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -668,6 +670,48 @@ describe('Combat Model Data structures', () => {
       expect(isPlayerDeploymentPosition(posRow1)).toBe(false);
       expect(isEnemyDeploymentPosition(posRow2)).toBe(false);
       expect(isEnemyDeploymentPosition(posRow3)).toBe(false);
+    });
+
+    it('detects depth positions (FRONT vs BACK) symmetrically and rejects invalid or cross-side coordinates', () => {
+      // 1. Symmetrical depth detection
+      // Player
+      expect(getDepthPosition({ column: 0, row: 2 }, 'player')).toBe('FRONT');
+      expect(getDepthPosition({ column: 5, row: 2 }, 'player')).toBe('FRONT');
+      expect(getDepthPosition({ column: 0, row: 3 }, 'player')).toBe('BACK');
+      expect(getDepthPosition({ column: 5, row: 3 }, 'player')).toBe('BACK');
+
+      // Enemy
+      expect(getDepthPosition({ column: 0, row: 1 }, 'enemy')).toBe('FRONT');
+      expect(getDepthPosition({ column: 5, row: 1 }, 'enemy')).toBe('FRONT');
+      expect(getDepthPosition({ column: 0, row: 0 }, 'enemy')).toBe('BACK');
+      expect(getDepthPosition({ column: 5, row: 0 }, 'enemy')).toBe('BACK');
+
+      // 2. Reject invalid coordinates
+      expect(getDepthPosition({ column: -1, row: 2 }, 'player')).toBeNull();
+      expect(getDepthPosition({ column: 6, row: 2 }, 'player')).toBeNull();
+      expect(getDepthPosition({ column: 0, row: 4 }, 'player')).toBeNull();
+      expect(getDepthPosition({ column: 1.5, row: 2 }, 'player')).toBeNull();
+
+      // 3. Reject cross-side zone mismatches
+      expect(getDepthPosition({ column: 0, row: 1 }, 'player')).toBeNull(); // player in enemy row
+      expect(getDepthPosition({ column: 0, row: 2 }, 'enemy')).toBeNull(); // enemy in player row
+
+      // 4. Squad-level helper checks
+      const placedPlayer: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 3, row: 2 },
+      };
+      const unplacedPlayer: Squad = {
+        unitTypeId: 'archer',
+        count: 3,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      expect(getSquadDepthCategory(placedPlayer, 'player')).toBe('FRONT');
+      expect(getSquadDepthCategory(unplacedPlayer, 'player')).toBeNull();
     });
   });
 });

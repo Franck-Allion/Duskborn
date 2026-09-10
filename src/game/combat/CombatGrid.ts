@@ -179,3 +179,45 @@ export function deployEnemySquads(enemySquads: readonly Squad[]): Squad[] {
     return { ...squad };
   });
 }
+
+export type DepthPosition = 'FRONT' | 'BACK';
+export type CombatSide = 'player' | 'enemy';
+
+/**
+ * Determines whether a logical position is in the FRONT or BACK row for its side.
+ * Returns null if the position is invalid, out of bounds, or does not belong to the side's zone.
+ */
+export function getDepthPosition(
+  position: CombatPosition,
+  side: CombatSide,
+): DepthPosition | null {
+  if (!isValidCombatPosition(position)) {
+    return null;
+  }
+
+  if (side === 'player') {
+    if (!isPlayerDeploymentPosition(position)) {
+      return null;
+    }
+    return position.row === ROW_PLAYER_FRONT ? 'FRONT' : 'BACK';
+  } else {
+    if (!isEnemyDeploymentPosition(position)) {
+      return null;
+    }
+    return position.row === ROW_ENEMY_FRONT ? 'FRONT' : 'BACK';
+  }
+}
+
+/**
+ * Determines the depth category of a squad based on its position and side.
+ * Returns null if the squad is unplaced (position is null).
+ */
+export function getSquadDepthCategory(
+  squad: Squad,
+  side: CombatSide,
+): DepthPosition | null {
+  if (squad.position === null) {
+    return null;
+  }
+  return getDepthPosition(squad.position, side);
+}
