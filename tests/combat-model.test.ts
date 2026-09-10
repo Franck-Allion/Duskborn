@@ -15,6 +15,8 @@ import {
   deployEnemySquads,
   getDepthPosition,
   getSquadDepthCategory,
+  getHorizontalPosition,
+  getSquadHorizontalCategory,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -712,6 +714,52 @@ describe('Combat Model Data structures', () => {
 
       expect(getSquadDepthCategory(placedPlayer, 'player')).toBe('FRONT');
       expect(getSquadDepthCategory(unplacedPlayer, 'player')).toBeNull();
+    });
+
+    it('detects horizontal positions (EDGE vs CENTER) and rejects invalid or unpositioned states', () => {
+      // 1. Table-driven check across all 6 columns (for row 2, player side)
+      const expectedHorizontal = [
+        'EDGE',
+        'CENTER',
+        'CENTER',
+        'CENTER',
+        'CENTER',
+        'EDGE',
+      ] as const;
+      for (let col = 0; col < GRID_COLUMNS; col += 1) {
+        expect(getHorizontalPosition({ column: col, row: 2 })).toBe(
+          expectedHorizontal[col],
+        );
+      }
+
+      // 2. Row does not affect horizontal categorization
+      expect(getHorizontalPosition({ column: 0, row: 0 })).toBe('EDGE');
+      expect(getHorizontalPosition({ column: 3, row: 0 })).toBe('CENTER');
+      expect(getHorizontalPosition({ column: 5, row: 1 })).toBe('EDGE');
+      expect(getHorizontalPosition({ column: 2, row: 3 })).toBe('CENTER');
+
+      // 3. Reject invalid coordinates
+      expect(getHorizontalPosition({ column: -1, row: 2 })).toBeNull();
+      expect(getHorizontalPosition({ column: 6, row: 2 })).toBeNull();
+      expect(getHorizontalPosition({ column: 0, row: 4 })).toBeNull();
+      expect(getHorizontalPosition({ column: 1.5, row: 2 })).toBeNull();
+
+      // 4. Squad-level helper checks
+      const placedPlayer: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 5, row: 3 },
+      };
+      const unplacedPlayer: Squad = {
+        unitTypeId: 'archer',
+        count: 3,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      expect(getSquadHorizontalCategory(placedPlayer)).toBe('EDGE');
+      expect(getSquadHorizontalCategory(unplacedPlayer)).toBeNull();
     });
   });
 });

@@ -392,7 +392,7 @@ CENTER
 ```
 
 * [x] Detect whether a squad is FRONT or BACK
-* [ ] Detect whether a squad is EDGE or CENTER
+* [x] Detect whether a squad is EDGE or CENTER
 * [ ] Keep position rules independent from Phaser
 * [ ] Add position tests
 

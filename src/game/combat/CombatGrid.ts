@@ -221,3 +221,33 @@ export function getSquadDepthCategory(
   }
   return getDepthPosition(squad.position, side);
 }
+
+export type HorizontalPosition = 'EDGE' | 'CENTER';
+
+/**
+ * Determines whether a logical position is on an EDGE column or in the CENTER area.
+ * Returns null if the position is invalid or out of bounds.
+ */
+export function getHorizontalPosition(
+  position: CombatPosition,
+): HorizontalPosition | null {
+  if (!isValidCombatPosition(position)) {
+    return null;
+  }
+
+  const isEdge = position.column === 0 || position.column === GRID_COLUMNS - 1;
+  return isEdge ? 'EDGE' : 'CENTER';
+}
+
+/**
+ * Determines the horizontal category of a squad based on its position.
+ * Returns null if the squad is unplaced (position is null).
+ */
+export function getSquadHorizontalCategory(
+  squad: Squad,
+): HorizontalPosition | null {
+  if (squad.position === null) {
+    return null;
+  }
+  return getHorizontalPosition(squad.position);
+}
