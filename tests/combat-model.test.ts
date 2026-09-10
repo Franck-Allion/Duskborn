@@ -11,6 +11,7 @@ import {
   isValidCombatPosition,
   isCombatPositionOccupied,
   canPlaceSquadAtPosition,
+  isValidPlayerPlacement,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -347,6 +348,57 @@ describe('Combat Model Data structures', () => {
       expect(canPlaceSquadAtPosition({ column: 99, row: 2 }, squads)).toBe(
         false,
       );
+    });
+
+    it('validates player placement correctly with isValidPlayerPlacement', () => {
+      const squad0: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 2, row: 2 },
+      };
+      const squad1: Squad = {
+        unitTypeId: 'archer',
+        count: 4,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      const playerSquads = [squad0, squad1];
+
+      // 1. Valid player deployment cells are accepted (rows 2 and 3)
+      expect(
+        isValidPlayerPlacement({ column: 0, row: 2 }, playerSquads, 1),
+      ).toBe(true);
+      expect(
+        isValidPlayerPlacement({ column: 5, row: 3 }, playerSquads, 1),
+      ).toBe(true);
+
+      // 2. Reject placing on occupied cells by other squads
+      expect(
+        isValidPlayerPlacement({ column: 2, row: 2 }, playerSquads, 1),
+      ).toBe(false);
+
+      // 3. Allow placing currently moving squad on its own current cell (no self-collision)
+      expect(
+        isValidPlayerPlacement({ column: 2, row: 2 }, playerSquads, 0),
+      ).toBe(true);
+
+      // 4. Reject placing in enemy deployment zone (rows 0 and 1)
+      expect(
+        isValidPlayerPlacement({ column: 0, row: 1 }, playerSquads, 1),
+      ).toBe(false);
+      expect(
+        isValidPlayerPlacement({ column: 5, row: 0 }, playerSquads, 1),
+      ).toBe(false);
+
+      // 5. Reject invalid coordinate bounds
+      expect(
+        isValidPlayerPlacement({ column: 99, row: 2 }, playerSquads, 1),
+      ).toBe(false);
+      expect(
+        isValidPlayerPlacement({ column: 1.5, row: 2 }, playerSquads, 1),
+      ).toBe(false);
     });
 
     it('enforces perfect zone partition (every valid cell belongs to exactly one side)', () => {

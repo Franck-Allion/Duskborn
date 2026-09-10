@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import {
   isPlayerDeploymentPosition,
-  isCellOccupied,
+  isValidPlayerPlacement,
   GRID_COLUMNS,
   GRID_ROWS,
 } from '../game/combat/CombatGrid';
@@ -206,11 +206,14 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    // Validate that the target cell is not already occupied by another squad
-    const otherSquads = this.combatState.playerSquads.filter(
-      (_, idx) => idx !== this.selectedSquadIndex,
-    );
-    if (isCellOccupied(pos, otherSquads)) {
+    // Validate that the target cell belongs to the player deployment zone and is not occupied
+    if (
+      !isValidPlayerPlacement(
+        pos,
+        this.combatState.playerSquads,
+        this.selectedSquadIndex,
+      )
+    ) {
       this.cameras.main.shake(100, 0.005); // feedback for invalid placement
       return;
     }

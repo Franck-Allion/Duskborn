@@ -109,3 +109,22 @@ export function isCellOccupied(
 ): boolean {
   return isCombatPositionOccupied(position, squads);
 }
+
+/**
+ * Checks if a player squad can be placed at a logical position.
+ * Returns true if the position is a valid player deployment cell AND not occupied by another squad.
+ */
+export function isValidPlayerPlacement(
+  position: CombatPosition,
+  playerSquads: readonly Squad[],
+  squadIndexToPlace: number,
+): boolean {
+  if (!isPlayerDeploymentPosition(position)) {
+    return false;
+  }
+
+  const otherSquads = playerSquads.filter(
+    (_, idx) => idx !== squadIndexToPlace,
+  );
+  return !isCombatPositionOccupied(position, otherSquads);
+}

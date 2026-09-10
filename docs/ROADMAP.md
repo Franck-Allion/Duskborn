@@ -342,7 +342,7 @@ Success condition:
 * [x] Allow player squads to be positioned before combat
 * [x] Allow only one squad per unit type
 * [x] Prevent splitting a squad
-* [ ] Restrict player placement to player deployment zone
+* [x] Restrict player placement to player deployment zone
 * [ ] Place enemy squads using deterministic initial rules
 * [ ] Add Confirm Deployment action
 * [ ] Prevent combat from starting before valid deployment
