@@ -19,6 +19,7 @@ import {
   getSquadHorizontalCategory,
   getLaneForPosition,
   getSquadLane,
+  getOpposingSquadsInLane,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -807,6 +808,97 @@ describe('Combat Model Data structures', () => {
 
       expect(getSquadLane(placedPlayer)).toBe(4);
       expect(getSquadLane(unplacedPlayer)).toBeNull();
+    });
+
+    it('discovers same-lane opponents symmetrically, ignores unplaced/dead/friendly squads, and exposes multiple same-lane candidates', () => {
+      // Setup typical rosters
+      const playerGuardian: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 2, row: 2 }, // Lane 2
+      };
+      const playerArcher: Squad = {
+        unitTypeId: 'archer',
+        count: 3,
+        damagedUnitHp: null,
+        position: { column: 3, row: 3 }, // Lane 3
+      };
+      const unplacedPlayer: Squad = {
+        unitTypeId: 'recruit',
+        count: 5,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      const enemyBrute1: Squad = {
+        unitTypeId: 'duskborn-brute',
+        count: 4,
+        damagedUnitHp: null,
+        position: { column: 2, row: 1 }, // Lane 2, Front
+      };
+      const enemyBrute2: Squad = {
+        unitTypeId: 'duskborn-brute',
+        count: 2,
+        damagedUnitHp: null,
+        position: { column: 2, row: 0 }, // Lane 2, Back (ambiguous lane case!)
+      };
+      const enemyArcher: Squad = {
+        unitTypeId: 'duskborn-archer',
+        count: 1,
+        damagedUnitHp: null,
+        position: { column: 1, row: 1 }, // Lane 1
+      };
+      const deadEnemy: Squad = {
+        unitTypeId: 'duskborn-brute',
+        count: 0, // DEAD
+        damagedUnitHp: null,
+        position: { column: 3, row: 1 }, // Lane 3
+      };
+      const unplacedEnemy: Squad = {
+        unitTypeId: 'duskborn-grunt',
+        count: 5,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      const playerSquads = [playerGuardian, playerArcher, unplacedPlayer];
+      const enemySquads = [
+        enemyBrute1,
+        enemyBrute2,
+        enemyArcher,
+        deadEnemy,
+        unplacedEnemy,
+      ];
+
+      // 1. Attacker is unpositioned => no candidates
+      expect(getOpposingSquadsInLane(unplacedPlayer, enemySquads)).toEqual([]);
+
+      // 2. Friendly squads are never targeted (the caller ensures we pass the opposing faction list, so friendly stays separate)
+      // If we pass friendly squads list to itself, it only retrieves the same lane friendly squad
+      expect(getOpposingSquadsInLane(playerGuardian, playerSquads)).toEqual([
+        playerGuardian,
+      ]);
+
+      // 3. Attacker lane 2 (Player Guardian) -> finds both Enemy Brutes in lane 2, ignoring unplaced or dead enemies.
+      // Exposes both same-lane candidates in stable order, without applying FRONT priority yet.
+      const lane2Targets = getOpposingSquadsInLane(playerGuardian, enemySquads);
+      expect(lane2Targets).toHaveLength(2);
+      expect(lane2Targets[0]).toBe(enemyBrute1);
+      expect(lane2Targets[1]).toBe(enemyBrute2);
+
+      // 4. Attacker lane 3 (Player Archer) -> dead opponent at lane 3 is ignored => returns empty
+      expect(getOpposingSquadsInLane(playerArcher, enemySquads)).toEqual([]);
+
+      // 5. Enemy Attacker lane 2 (Enemy Brute 1) -> finds Player Guardian in lane 2
+      const enemyLane2Targets = getOpposingSquadsInLane(
+        enemyBrute1,
+        playerSquads,
+      );
+      expect(enemyLane2Targets).toEqual([playerGuardian]);
+
+      // 6. Enemy Attacker lane 1 (Enemy Archer) -> no Player squad in lane 1 => returns empty
+      expect(getOpposingSquadsInLane(enemyArcher, playerSquads)).toEqual([]);
     });
   });
 });

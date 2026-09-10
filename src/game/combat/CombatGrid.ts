@@ -277,3 +277,27 @@ export function getSquadLane(squad: Squad): CombatLane | null {
   }
   return getLaneForPosition(squad.position);
 }
+
+/**
+ * Retrieves all opposing squads occupying the same logical combat lane (column) as the attacker.
+ * Returns an empty array if the attacker is unplaced (position is null).
+ * Excludes unplaced, dead, or invalidly positioned opposing squads.
+ */
+export function getOpposingSquadsInLane(
+  attacker: Squad,
+  opponents: readonly Squad[],
+): Squad[] {
+  const attackerLane = getSquadLane(attacker);
+  if (attackerLane === null) {
+    return [];
+  }
+
+  // Filter opposing squads that are active (count > 0), placed, and share the same lane
+  return opponents.filter((squad) => {
+    if (squad.count <= 0 || squad.position === null) {
+      return false;
+    }
+    const squadLane = getSquadLane(squad);
+    return squadLane === attackerLane;
+  });
+}
