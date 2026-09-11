@@ -427,7 +427,7 @@ Each column is a combat lane.
 * [x] A squad normally targets the opposing squad in the same column
 * [x] If both enemy rows are occupied in that column, FRONT is targeted first
 * [x] If the opposing lane contains no squad, damage goes directly to enemy hero
-* [ ] Add targeting tests
+* [x] Add targeting tests
 
 Example:
 
