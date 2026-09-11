@@ -301,3 +301,33 @@ export function getOpposingSquadsInLane(
     return squadLane === attackerLane;
   });
 }
+
+/**
+ * Selects a single deterministic target squad from the same combat lane (column) as the attacker.
+ * If 0 candidates exist, returns null.
+ * If 1 candidate exists, returns that candidate (FRONT or BACK).
+ * If 2 candidates exist (both rows occupied in that column), targets the FRONT squad first,
+ * regardless of collection order.
+ */
+export function selectLaneTarget(
+  attacker: Squad,
+  attackerSide: CombatSide,
+  opponents: readonly Squad[],
+): Squad | null {
+  const candidates = getOpposingSquadsInLane(attacker, opponents);
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  const opponentSide: CombatSide = attackerSide === 'player' ? 'enemy' : 'player';
+
+  // Find the candidate that is FRONT.
+  const frontCandidate = candidates.find(
+    (squad) => getSquadDepthCategory(squad, opponentSide) === 'FRONT',
+  );
+
+  return frontCandidate || candidates[0];
+}

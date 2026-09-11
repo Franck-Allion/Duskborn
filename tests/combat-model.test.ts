@@ -20,6 +20,7 @@ import {
   getLaneForPosition,
   getSquadLane,
   getOpposingSquadsInLane,
+  selectLaneTarget,
 } from '../src/game/combat/CombatGrid';
 import type { CombatPosition } from '../src/game/combat/CombatPosition';
 import {
@@ -899,6 +900,109 @@ describe('Combat Model Data structures', () => {
 
       // 6. Enemy Attacker lane 1 (Enemy Archer) -> no Player squad in lane 1 => returns empty
       expect(getOpposingSquadsInLane(enemyArcher, playerSquads)).toEqual([]);
+    });
+
+    describe('selectLaneTarget FRONT-priority targeting', () => {
+      // Setup squads
+      const playerFront: Squad = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: { column: 2, row: 2 }, // Player Front
+      };
+      const playerBack: Squad = {
+        unitTypeId: 'archer',
+        count: 3,
+        damagedUnitHp: null,
+        position: { column: 2, row: 3 }, // Player Back
+      };
+      const enemyFront: Squad = {
+        unitTypeId: 'duskborn-brute',
+        count: 4,
+        damagedUnitHp: null,
+        position: { column: 2, row: 1 }, // Enemy Front
+      };
+      const enemyBack: Squad = {
+        unitTypeId: 'duskborn-archer',
+        count: 2,
+        damagedUnitHp: null,
+        position: { column: 2, row: 0 }, // Enemy Back
+      };
+
+      it('targets FRONT first when both rows are occupied in that column (Player Attacker)', () => {
+        // Player attacker in lane 2 targeting enemy
+        // Opponents array with [Back, Front] order
+        const target1 = selectLaneTarget(playerFront, 'player', [enemyBack, enemyFront]);
+        expect(target1).toBe(enemyFront);
+
+        // Opponents array with [Front, Back] order to verify order independence
+        const target2 = selectLaneTarget(playerFront, 'player', [enemyFront, enemyBack]);
+        expect(target2).toBe(enemyFront);
+      });
+
+      it('targets FRONT first when both rows are occupied in that column (Enemy Attacker)', () => {
+        // Enemy attacker in lane 2 targeting player
+        // Opponents array with [Back, Front] order
+        const target1 = selectLaneTarget(enemyFront, 'enemy', [playerBack, playerFront]);
+        expect(target1).toBe(playerFront);
+
+        // Opponents array with [Front, Back] order to verify order independence
+        const target2 = selectLaneTarget(enemyFront, 'enemy', [playerFront, playerBack]);
+        expect(target2).toBe(playerFront);
+      });
+
+      it('targets BACK when FRONT is empty/absent/dead (Player Attacker)', () => {
+        // FRONT is not in opponents array
+        const target1 = selectLaneTarget(playerFront, 'player', [enemyBack]);
+        expect(target1).toBe(enemyBack);
+
+        // FRONT is dead (count = 0)
+        const deadEnemyFront: Squad = { ...enemyFront, count: 0 };
+        const target2 = selectLaneTarget(playerFront, 'player', [enemyBack, deadEnemyFront]);
+        expect(target2).toBe(enemyBack);
+      });
+
+      it('targets BACK when FRONT is empty/absent/dead (Enemy Attacker)', () => {
+        // FRONT is not in opponents array
+        const target1 = selectLaneTarget(enemyFront, 'enemy', [playerBack]);
+        expect(target1).toBe(playerBack);
+
+        // FRONT is dead (count = 0)
+        const deadPlayerFront: Squad = { ...playerFront, count: 0 };
+        const target2 = selectLaneTarget(enemyFront, 'enemy', [playerBack, deadPlayerFront]);
+        expect(target2).toBe(playerBack);
+      });
+
+      it('targets FRONT when BACK is empty/absent/dead', () => {
+        // BACK is not in opponents array
+        const target = selectLaneTarget(playerFront, 'player', [enemyFront]);
+        expect(target).toBe(enemyFront);
+
+        // BACK is dead (count = 0)
+        const deadEnemyBack: Squad = { ...enemyBack, count: 0 };
+        const targetDeadBack = selectLaneTarget(playerFront, 'player', [enemyFront, deadEnemyBack]);
+        expect(targetDeadBack).toBe(enemyFront);
+      });
+
+      it('ignores other lanes completely', () => {
+        // Enemy Front squad in lane 4 (column 4)
+        const otherLaneEnemy: Squad = {
+          unitTypeId: 'duskborn-brute',
+          count: 5,
+          damagedUnitHp: null,
+          position: { column: 4, row: 1 },
+        };
+        // Attacker is in lane 2 (column 2)
+        // Opponents has enemyBack in lane 2, and otherLaneEnemy in lane 4
+        // Result should be enemyBack in lane 2 (even though it is BACK and the other is FRONT but in another lane)
+        const target = selectLaneTarget(playerFront, 'player', [otherLaneEnemy, enemyBack]);
+        expect(target).toBe(enemyBack);
+      });
+
+      it('returns null if no opponents occupy the lane', () => {
+        const target = selectLaneTarget(playerFront, 'player', []);
+        expect(target).toBeNull();
+      });
     });
   });
 });
