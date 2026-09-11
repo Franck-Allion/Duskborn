@@ -124,16 +124,18 @@ Success condition:
 
 The combat system should validate tactical depth without becoming a full tactical RPG.
 
+The combat model is now based on alternating turns inspired by a simplified card battler.
+
 Core combat principles:
 
 ```text
 Grid: 6 columns × 4 rows
-Player zone: 6 × 2
-Enemy zone: 6 × 2
 
-No movement during combat.
+Enemy zone: 6 × 2
+Player zone: 6 × 2
 
 Each unit type is represented by one indivisible squad.
+
 Example:
 - Guardians ×8
 - Archers ×3
@@ -142,14 +144,47 @@ Example:
 A squad cannot be split into multiple groups.
 ```
 
-Combat should remain fast and readable.
+Combat alternates between the player and the Duskborn.
 
-Target for normal combat:
+Each side follows the same high-level turn sequence:
 
 ```text
-3–5 rounds
-A few minutes maximum
+START TURN
+↓
+Restore Mana to maximum
+↓
+Draw 1 spell
+↓
+DEPLOYMENT PHASE
+- deploy / reposition squads
+- respect lane engagement restrictions
+↓
+ACTION PHASE
+- cast spells
+- select / activate squad abilities
+- spend Mana
+↓
+CONFIRM ATTACK
+↓
+ATTACK RESOLUTION
+- determine squad targets
+- evaluate attacks
+- resolve squad damage
+- resolve direct hero damage through empty lanes
+- remove casualties
+↓
+CHECK COMBAT RESULT
+↓
+END TURN
+↓
+Other side becomes active
 ```
+
+There is no free movement during the action or resolution phases.
+
+Squad repositioning happens only during the active side's deployment phase.
+
+Combat continues until one hero reaches 0 HP.
 
 The combat system must remain pure TypeScript whenever practical.
 
@@ -162,8 +197,14 @@ CombatSystem
     ↓
 CombatState
     ↓
-UnitType / Squad / Ability definitions
+Turn / Targeting / Ability / Spell systems
+    ↓
+UnitType / Squad / Ability / Spell definitions
 ```
+
+Avoid importing the full complexity of games such as Magic: The Gathering.
+
+The MVP should remain deterministic, readable, and fast.
 
 ---
 
@@ -309,10 +350,10 @@ Success condition:
 * [x] Add grid tests
 * [x] Render combat grid in CombatScene
 
-Suggested orientation:
+Orientation:
 
 ```text
-DUSKBORN / ENEMY SIDE (TOP)
+DUSKBORN / ENEMY SIDE
 
 Enemy back row (row 0)
 [ ][ ][ ][ ][ ][ ]
@@ -328,16 +369,18 @@ Player front row (row 2)
 Player back row (row 3)
 [ ][ ][ ][ ][ ][ ]
 
-PLAYER SIDE (BOTTOM)
+PLAYER SIDE
 ```
 
 Success condition:
 
-> The combat screen clearly displays both 6×2 deployment zones.
+> The combat screen clearly displays both 6×2 combat zones.
 
 ---
 
-## 0.6.4 Squad Deployment
+## 0.6.4 Squad Deployment Foundation
+
+The original deployment implementation remains valid as the foundation for per-turn deployment.
 
 * [x] Allow player squads to be positioned before combat
 * [x] Allow only one squad per unit type
@@ -349,38 +392,17 @@ Success condition:
 * [x] Add drag-and-drop deployment interaction
 * [x] Add deployment tests
 
-Example:
+Existing placement validation, drag-and-drop behavior, occupancy rules, and indivisible-squad rules should be reused by the per-turn deployment system.
 
-```text
-Guardians ×8
-Archers ×3
-```
-
-Valid:
-
-```text
-[ Archers ×3 ][             ]
-[             ][ Guardians ×8 ]
-```
-
-Invalid:
-
-```text
-Guardians ×4
-Guardians ×4
-```
-
-The player owns one Guardian squad, not two independent Guardian squads.
+Do not create a second placement rules engine.
 
 Success condition:
 
-> The player decides where each unit type begins the battle.
+> The existing deployment system provides a stable reusable foundation for placing and repositioning squads during combat turns.
 
 ---
 
 ## 0.6.5 Position Categories
-
-Introduce simple position tags.
 
 Supported MVP categories:
 
@@ -396,22 +418,26 @@ CENTER
 * [x] Keep position rules independent from Phaser
 * [x] Add position tests
 
-Avoid adding many exact-cell-specific bonuses.
-
-Abilities may later depend on these categories.
-
-Example:
+Canonical depth rules:
 
 ```text
-Guardian:
-+Armor while FRONT
+Enemy:
+row 0 = BACK
+row 1 = FRONT
 
-Archer:
-+Damage while BACK
-
-Assassin later:
-special bonus while EDGE
+Player:
+row 2 = FRONT
+row 3 = BACK
 ```
+
+Horizontal rules:
+
+```text
+columns 0 and 5 = EDGE
+columns 1–4 = CENTER
+```
+
+Abilities may depend on these categories.
 
 Success condition:
 
@@ -429,16 +455,35 @@ Each column is a combat lane.
 * [x] If the opposing lane contains no squad, damage goes directly to enemy hero
 * [x] Add targeting tests
 
+Targeting flow:
+
+```text
+Attacking squad
+↓
+Find surviving opposing squads in same lane
+
+0 squads
+=> opposing hero
+
+1 squad
+=> that squad
+
+2 squads
+=> FRONT squad
+```
+
+Targeting works symmetrically for both sides.
+
 Example:
 
 ```text
 Player Archer
       ↓
-Enemy Guardian
-Enemy Mage
-```
+Enemy Guardian FRONT
+Enemy Mage BACK
 
-The Guardian is targeted first.
+=> Guardian targeted
+```
 
 Example:
 
@@ -447,9 +492,13 @@ Player Archer
       ↓
 empty
 empty
+
+=> Enemy Hero targeted
 ```
 
-Damage is dealt directly to the enemy hero.
+The existing targeting system determines targets.
+
+Actual damage application belongs to attack resolution later.
 
 Success condition:
 
@@ -457,66 +506,189 @@ Success condition:
 
 ---
 
-## 0.6.7 Enemy Intentions
+## 0.6.7 Alternating Turn System
 
-Enemy behavior should be predictable enough for tactical decisions.
+Replace the previous simultaneous round/intention model with explicit alternating turns.
 
-* [ ] Create enemy intent model
-* [ ] Generate one visible intent per enemy squad each round
-* [ ] Display enemy intentions before player confirms the round
-* [ ] Keep intent generation in pure TypeScript
-* [ ] Add intent tests
+Add a combat turn state such as:
 
-Examples:
+```ts
+type CombatSide = 'player' | 'enemy';
 
-```text
-Duskborn Brute
-Intent:
-Strike
-6 damage
-Same lane
+type CombatPhase =
+  | 'TURN_START'
+  | 'DEPLOYMENT'
+  | 'ACTION'
+  | 'RESOLUTION'
+  | 'TURN_END'
+  | 'VICTORY'
+  | 'DEFEAT';
 ```
 
-```text
-Duskborn Archer
-Intent:
-Volley
-4 damage
-Opposing lane
-```
+Exact naming may follow existing project conventions.
 
-Avoid hidden random targeting when possible.
+* [ ] Add active side to `CombatState`
+* [ ] Add combat turn number to `CombatState`
+* [ ] Add explicit combat phase to `CombatState`
+* [ ] Start combat with the player as active side
+* [ ] Implement `TURN_START`
+* [ ] Transition `TURN_START → DEPLOYMENT`
+* [ ] Transition `DEPLOYMENT → ACTION`
+* [ ] Add Confirm Attack transition from `ACTION → RESOLUTION`
+* [ ] Transition `RESOLUTION → TURN_END`
+* [ ] Switch active side during `TURN_END`
+* [ ] Start the next side's turn
+* [ ] Prevent actions that are invalid for the current phase
+* [ ] Add turn-state tests
+
+Do not implement enemy intentions.
+
+The active side fully resolves its turn before the other side acts.
 
 Success condition:
 
-> The player knows what the enemy plans to do before choosing actions.
+> Player turn → enemy turn → player turn can repeat deterministically through pure combat state.
 
 ---
 
-## 0.6.8 Squad Abilities
+## 0.6.8 Combat Mana
 
-Each squad chooses one ability per round.
+Combat Mana is refreshed each turn.
 
-Do not use combat action points in the MVP.
+Represent Mana explicitly as:
 
-Possible cost types:
-
-```text
-Free
-Mana
-Gold
+```ts
+interface CombatMana {
+  current: number;
+  max: number;
+}
 ```
 
-* [ ] Create ability content definition structure
-* [ ] Give Guardian at least 2 abilities
-* [ ] Give Archer at least 2 abilities
-* [ ] Give each Duskborn type at least 1 ability
-* [ ] Support Free ability cost
-* [ ] Support Mana ability cost
-* [ ] Support Gold ability cost
-* [ ] Prevent ability use when resources are insufficient
-* [ ] Deduct resources only when the ability is successfully resolved
-* [ ] Add ability tests
+or equivalent.
+
+Both sides use the same Mana rules.
+
+* [ ] Add player combat Mana
+* [ ] Add enemy combat Mana
+* [ ] Restore active side Mana to maximum at `TURN_START`
+* [ ] Allow actions to spend current Mana
+* [ ] Prevent Mana from dropping below 0
+* [ ] Prevent actions when Mana cost cannot be paid
+* [ ] Ensure unused current Mana does not accumulate beyond max
+* [ ] Clarify/separate combat Mana from existing persistent `RunState` Mana semantics
+* [ ] Add combat Mana tests
+
+The existing exploration `Mana` resource must not accidentally become both a persistent currency and an automatically refreshed combat resource.
+
+If both concepts remain useful, represent them separately.
+
+Success condition:
+
+> Every turn starts with a predictable Mana budget that must be allocated between spells and squad abilities.
+
+---
+
+## 0.6.9 Spell Deck and Draw
+
+Introduce a deliberately small spell-card layer.
+
+Each side may have:
+
+```text
+Draw pile
+Hand
+Discard pile
+```
+
+Keep the MVP minimal.
+
+* [ ] Create `SpellDefinition`
+* [ ] Create pure TypeScript spell deck state
+* [ ] Create initial player spell deck
+* [ ] Create initial Duskborn spell deck or deterministic equivalent
+* [ ] Draw 1 spell for the active side at `TURN_START`
+* [ ] Put played spells into discard
+* [ ] Define deterministic behavior when draw pile is empty
+* [ ] Keep spell/deck logic independent from Phaser
+* [ ] Add spell draw/deck tests
+
+Avoid for the MVP:
+
+* rarity systems;
+* booster mechanics;
+* interrupts;
+* a Magic-style stack;
+* reactions during the opponent turn;
+* complex card timing rules.
+
+Success condition:
+
+> Each turn gives the active side one new tactical spell option without turning combat into a full collectible card game.
+
+---
+
+## 0.6.10 Per-Turn Squad Deployment
+
+Adapt the completed deployment foundation so deployment happens during every active turn.
+
+Existing squad positions persist between turns unless explicitly repositioned.
+
+During `DEPLOYMENT`, the active side may reposition its surviving squads within its own 6×2 zone.
+
+### Lane engagement restriction
+
+Use this MVP rule:
+
+> If the opposing side has at least one surviving positioned squad, a squad being deployed or repositioned may only be placed in a column currently occupied by at least one opposing squad.
+
+Example:
+
+```text
+Enemy:
+lane 1 = Brute
+lane 4 = Archer
+
+Player legal deployment columns:
+lane 1
+lane 4
+```
+
+The player may choose FRONT/BACK within those legal columns according to normal placement rules.
+
+A squad already occupying a lane is not automatically moved when the opponent later leaves that lane.
+
+Therefore a lane may become empty after an opponent repositions, exposing the opposing hero to direct damage.
+
+* [ ] Reuse existing deployment APIs for per-turn repositioning
+* [ ] Allow deployment only during the active side's `DEPLOYMENT` phase
+* [ ] Allow surviving player squads to be repositioned each player turn
+* [ ] Allow surviving enemy squads to be repositioned each enemy turn
+* [ ] Preserve squad count and partial HP while repositioning
+* [ ] Apply lane engagement restriction
+* [ ] Prevent deployment into an empty column while opposing squads occupy other columns
+* [ ] Preserve existing occupancy and deployment-zone validation
+* [ ] Prevent deployment changes after entering `ACTION`
+* [ ] Adapt drag-and-drop to player per-turn deployment
+* [ ] Replace/adapt one-time `deploymentConfirmed` semantics to the turn phase model
+* [ ] Add per-turn deployment tests
+
+Do not duplicate the existing placement engine.
+
+Success condition:
+
+> Placement becomes a tactical decision every turn while squads remain constrained by the enemy battle line.
+
+---
+
+## 0.6.11 Squad Abilities and Spells
+
+Spells and squad abilities share the active side's combat Mana budget.
+
+### Squad abilities
+
+Each surviving squad may select at most one attack ability for the turn.
+
+Basic abilities should remain simple.
 
 Example:
 
@@ -524,168 +696,258 @@ Example:
 Guardian
 
 Strike
-Cost: Free
+Cost: 0 Mana
 
 Shield Wall
-Cost: 2 Gold
-Effect: defensive bonus this round
+Cost: 2 Mana
 ```
 
 ```text
 Archer
 
 Shot
-Cost: Free
+Cost: 0 Mana
 
 Power Shot
 Cost: 1 Mana
-Effect: increased damage
 ```
 
-Mana and Gold are RunState resources and must remain persistent between combat and exploration.
+### Spells
+
+Spells come from the active side's hand and may affect:
+
+* squads;
+* lanes;
+* hero HP;
+* Mana;
+* attack values;
+* positioning rules;
+
+but keep first effects simple.
+
+* [ ] Create/extend ability content definition structure
+* [ ] Give Guardian at least 2 meaningful abilities
+* [ ] Give Archer at least 2 meaningful abilities
+* [ ] Give each Duskborn type at least 1 usable ability
+* [ ] Support Mana ability costs
+* [ ] Add at least 3 simple player spells
+* [ ] Add a minimal set of Duskborn spells or deterministic equivalents
+* [ ] Support Mana spell costs
+* [ ] Prevent ability/spell use when Mana is insufficient
+* [ ] Spend Mana only on successful legal actions
+* [ ] Prevent more than one selected attack ability per squad per turn
+* [ ] Allow multiple spells in a turn while Mana permits
+* [ ] Add ability/spell tests
+
+Gold is not a combat action cost in this MVP.
+
+Gold remains an exploration/economy resource unless a later design explicitly reintroduces combat spending.
 
 Success condition:
 
-> Combat decisions consume resources gathered during exploration.
+> Mana creates a meaningful choice between squad abilities and spell effects.
 
 ---
 
-## 0.6.9 Position-Based Abilities
+## 0.6.12 Position-Based Abilities
 
-Allow selected abilities/passives to react to position.
+Use the already completed position-category system.
 
 * [ ] Add at least one FRONT-based effect
 * [ ] Add at least one BACK-based effect
 * [ ] Add at least one EDGE or CENTER-based effect
+* [ ] Re-evaluate position effects after legal repositioning
 * [ ] Keep these rules data-driven where practical
-* [ ] Add tests
+* [ ] Add position-effect tests
 
 Example:
 
 ```text
 Guardian
 Bulwark:
-+2 Armor while FRONT
+bonus while FRONT
 ```
 
 ```text
 Archer
 Marksman:
-+2 Damage while BACK
+bonus while BACK
 ```
 
 Avoid excessive positional complexity.
 
 Success condition:
 
-> Squad placement changes combat effectiveness.
+> Per-turn squad repositioning changes the effectiveness of squad abilities.
 
 ---
 
-## 0.6.10 Round Selection
+## 0.6.13 Action Phase and Confirm Attack
 
-Combat rounds should be decision-based rather than initiative-based.
+During `ACTION`, the active side prepares its attack.
 
-Round structure:
+The active side may:
 
 ```text
-Reveal enemy intentions
-↓
-Player chooses one ability per squad
-↓
-Player confirms round
-↓
-Resolve actions
-↓
-Apply damage / deaths / hero damage
-↓
-Generate next intentions
-↓
-Next round
+select one ability per surviving squad
+cast spells while Mana remains
+inspect resulting combat state
+confirm the attack
 ```
 
-* [ ] Add round number to CombatState
-* [ ] Allow one selected ability per surviving player squad
-* [ ] Display selected abilities
-* [ ] Add Confirm Round action
-* [ ] Prevent confirmation if required selections are missing
-* [ ] Add round-selection tests
+Basic squad attacks remain available even when no Mana is spent.
 
-No movement occurs during combat.
+* [ ] Allow ability selection only during `ACTION`
+* [ ] Allow spell play only during `ACTION`
+* [ ] Display/track selected ability for each active squad
+* [ ] Add Confirm Attack action
+* [ ] Prevent opponent-side actions during the active turn
+* [ ] Prevent deployment changes during `ACTION`
+* [ ] Validate selected actions before confirmation
+* [ ] Prevent further action changes once attack resolution starts
+* [ ] Add action-phase tests
+
+Do not require the player to spend all Mana.
 
 Success condition:
 
-> The player makes one compact tactical decision for each squad every round.
+> The active side can deliberately prepare a complete attack before committing to resolution.
 
 ---
 
-## 0.6.11 Round Resolution
+## 0.6.14 Attack Resolution
 
-* [ ] Resolve player chosen abilities
-* [ ] Resolve enemy intentions
+When Confirm Attack is pressed, resolve only the active side's attack.
+
+Use the existing lane-targeting system.
+
+For each surviving attacking squad:
+
+```text
+same lane
+↓
+FRONT opposing squad if present
+↓
+BACK opposing squad if FRONT absent
+↓
+opposing hero if lane empty
+```
+
+Keep attack resolution deterministic.
+
+* [ ] Resolve selected squad abilities
+* [ ] Resolve spell effects required before attacks
+* [ ] Evaluate attacks for every surviving active-side squad
+* [ ] Use existing lane-targeting rules
 * [ ] Apply squad damage
 * [ ] Remove dead units from squad counts
 * [ ] Preserve partial HP on the currently damaged unit
-* [ ] Remove squad when count reaches 0
-* [ ] Apply direct hero damage when lane is empty
-* [ ] Deduct Mana/Gold costs
-* [ ] Increment combat round
-* [ ] Generate next enemy intents
-* [ ] Add resolution tests
-
-Keep resolution deterministic for the first MVP.
+* [ ] Remove/disable squad when count reaches 0
+* [ ] Apply direct hero damage when opposing lane is empty
+* [ ] Ensure dead squads no longer block lanes
+* [ ] Preserve deterministic resolution order
+* [ ] Complete Mana spending semantics
+* [ ] Add attack-resolution tests
 
 Avoid:
 
 * critical hits;
 * dodge;
 * random damage ranges;
-* complex status effects.
-
-These may be introduced later if useful.
+* complex status effects;
+* initiative inside a single side's attack.
 
 Success condition:
 
-> A complete round can be selected and resolved entirely through pure game logic.
+> One complete active-side attack can be resolved entirely through pure TypeScript game logic.
 
 ---
 
-## 0.6.12 Combat Result
+## 0.6.15 Duskborn Turn AI
 
-Initial victory conditions:
+The Duskborn follows the same rules as the player.
 
-```text
-Enemy hero HP reaches 0
-OR
-all enemy squads are defeated
-```
-
-Initial defeat conditions:
+Enemy turns must use:
 
 ```text
-Player hero HP reaches 0
-OR
-all player squads are defeated
+TURN_START
+↓
+Mana restore
+↓
+Draw
+↓
+DEPLOYMENT
+↓
+ACTION
+↓
+CONFIRM ATTACK
+↓
+RESOLUTION
+↓
+TURN_END
 ```
 
-* [ ] Detect victory
-* [ ] Detect defeat
+Use deterministic heuristics for the MVP.
+
+* [ ] Reuse the same combat phase system for Duskborn turns
+* [ ] Restore enemy Mana at enemy turn start
+* [ ] Draw enemy spell
+* [ ] Reposition enemy squads using legal deployment rules
+* [ ] Respect lane engagement restrictions
+* [ ] Choose legal squad abilities
+* [ ] Choose legal spells within available Mana
+* [ ] Confirm and resolve enemy attack
+* [ ] Keep initial AI deterministic
+* [ ] Keep AI decision logic independent from Phaser
+* [ ] Add enemy-turn tests
+
+Do not add hidden enemy intentions.
+
+The enemy acts openly when its turn begins.
+
+Success condition:
+
+> The Duskborn can complete a legal turn using exactly the same combat rules as the player.
+
+---
+
+## 0.6.16 Combat Result
+
+Combat is decided by hero HP.
+
+Victory:
+
+```text
+Enemy hero HP <= 0
+```
+
+Defeat:
+
+```text
+Player hero HP <= 0
+```
+
+Losing all squads does not by itself end combat.
+
+* [ ] Detect player victory from enemy hero HP
+* [ ] Detect player defeat from player hero HP
+* [ ] Check result after attack resolution
+* [ ] Stop turn transitions when combat has ended
 * [ ] Display combat result
 * [ ] Preserve surviving player squad counts
-* [ ] Preserve partially damaged surviving units if appropriate
-* [ ] Preserve Mana spent
-* [ ] Preserve Gold spent
-* [ ] Add result tests
+* [ ] Preserve partially damaged surviving units
+* [ ] Preserve relevant run resources
+* [ ] Add combat-result tests
 
-Do not automatically restore dead units after combat.
+Do not automatically restore defeated units after combat.
 
 Success condition:
 
-> Losses and resource spending matter beyond the current battle.
+> Combat continues through alternating turns until one hero reaches 0 HP.
 
 ---
 
-## 0.6.13 Unit-Type Progression
+## 0.6.17 Unit-Type Progression
 
 Unit progression belongs to the unit type, not to individual soldiers.
 
@@ -719,22 +981,6 @@ interface UnitTypeProgression {
 }
 ```
 
-Example:
-
-```text
-ARCHERS LEVEL 2
-
-Choose one:
-
-Piercing Shot
-Ignore 2 Armor
-
-OR
-
-Backline Training
-+2 Damage while BACK
-```
-
 This progression is temporary run progression.
 
 It must remain distinct from account/meta XP earned after a run.
@@ -745,71 +991,85 @@ Success condition:
 
 ---
 
-## 0.6.14 First Combat UI Pass
+## 0.6.18 Combat UI Pass
 
 Keep UI simple but readable.
 
-Display:
+Already completed UI foundations should be reused:
 
-* [ ] 6×4 combat grid
-* [ ] player squads with unit count
-* [ ] enemy squads with unit count
-* [ ] current HP state where useful
+```text
+6×4 grid
+squad rendering
+deployment interaction
+drag-and-drop
+```
+
+Add/display:
+
+* [ ] active side
+* [ ] current combat turn
+* [ ] current combat phase
 * [ ] player hero HP
 * [ ] enemy hero HP
-* [ ] current round
-* [ ] Mana
-* [ ] Gold
-* [ ] enemy intentions
-* [ ] available ability buttons
-* [ ] selected ability per squad
-* [ ] Confirm Round button
+* [ ] player current/max Mana
+* [ ] enemy current/max Mana where useful
+* [ ] player spell hand
+* [ ] spell Mana costs
+* [ ] available squad abilities
+* [ ] ability Mana costs
+* [ ] selected ability per active squad
+* [ ] legal deployment cells during DEPLOYMENT
+* [ ] illegal empty lanes when lane engagement restriction applies
+* [ ] Confirm Attack button
+* [ ] attack/result feedback
 * [ ] victory / defeat panel
 
 Example squad display:
-
-```text
-Guardians
-×8
-```
-
-or:
 
 ```text
 Guardians ×8
 7/10 HP
 ```
 
-for a partially damaged current unit.
-
 Do not prioritize final art, animation, or sound yet.
 
 Success condition:
 
-> The player can understand the full combat state without reading logs or debugging output.
+> The player can understand whose turn it is, what phase is active, what Mana is available, and what actions are legal without reading debug output.
 
 ---
 
-## 0.6.15 Combat MVP Tests
+## 0.6.19 Combat MVP Integration Tests
 
-Add pure TypeScript tests covering at minimum:
+Existing grid, deployment, position-category, and lane-targeting test suites remain valid.
 
-* [ ] squad HP and casualties
+Add pure TypeScript integration coverage for the new combat loop.
+
+At minimum:
+
+* [ ] player turn start
+* [ ] enemy turn start
+* [ ] active-side switching
+* [ ] Mana refresh
+* [ ] spell draw
+* [ ] per-turn repositioning
+* [ ] lane engagement deployment restriction
+* [ ] phase restrictions
+* [ ] ability Mana spending
+* [ ] spell Mana spending
+* [ ] insufficient Mana rejection
+* [ ] Confirm Attack
+* [ ] FRONT targeting during attack
+* [ ] BACK targeting when FRONT is absent
+* [ ] empty-lane hero damage
+* [ ] squad casualties
 * [ ] partial unit HP
-* [ ] indivisible squad rules
-* [ ] valid deployment
-* [ ] invalid deployment
-* [ ] FRONT / BACK detection
-* [ ] EDGE / CENTER detection
-* [ ] lane targeting
-* [ ] frontline targeting priority
-* [ ] empty lane hero damage
-* [ ] ability resource costs
-* [ ] insufficient resource rejection
-* [ ] enemy intent generation
-* [ ] round resolution
-* [ ] victory detection
-* [ ] defeat detection
+* [ ] dead squad lane removal
+* [ ] player attack resolution
+* [ ] enemy attack resolution
+* [ ] victory from enemy hero HP reaching 0
+* [ ] defeat from player hero HP reaching 0
+* [ ] combat stops after result
 * [ ] surviving squad persistence
 * [ ] unit-type XP
 * [ ] unit-type level-up
@@ -817,33 +1077,36 @@ Add pure TypeScript tests covering at minimum:
 
 Success condition:
 
-> Core combat rules can be refactored without depending on Phaser rendering.
+> A complete player turn and enemy turn can be simulated and tested without Phaser.
 
 ---
 
-## 0.6.16 Combat MVP Review
+## 0.6.20 Combat MVP Review
 
 Do not add more combat complexity before reviewing the prototype.
 
 Review:
 
-* [ ] Is placement tactically meaningful?
+* [ ] Is per-turn placement tactically meaningful?
+* [ ] Is the lane engagement restriction easy to understand?
+* [ ] Does repositioning create meaningful attack/defense decisions?
 * [ ] Are FRONT/BACK/EDGE/CENTER easy to understand?
-* [ ] Are enemy intentions useful?
-* [ ] Does lane targeting create interesting decisions?
-* [ ] Is direct hero damage threatening?
-* [ ] Does spending Mana feel meaningful?
-* [ ] Does spending Gold in combat compete meaningfully with economy?
+* [ ] Does lane targeting remain predictable?
+* [ ] Is leaving a lane open to hero damage strategically interesting?
+* [ ] Does Mana create meaningful choices between spells and unit abilities?
+* [ ] Does drawing one spell per turn create useful variety?
+* [ ] Are spells understandable without introducing excessive card-game complexity?
 * [ ] Do different unit types feel distinct?
+* [ ] Is alternating player/enemy resolution easy to follow?
+* [ ] Does first-player advantage need compensation?
 * [ ] Are unit losses impactful without being frustrating?
 * [ ] Is unit-type leveling satisfying?
 * [ ] Are ability choices more interesting than flat stat upgrades?
-* [ ] Do normal battles stay around 3–5 rounds?
 * [ ] Does combat remain short enough to preserve the "One More Day" rhythm?
 
 Success condition:
 
-> Combat is tactical enough to influence exploration decisions while remaining fast enough to support repeated daily battles.
+> Combat combines tactical lane placement, Mana allocation, squad abilities, and lightweight spell-card decisions while remaining fast enough for repeated daily battles.
 
 ---
 
@@ -853,7 +1116,7 @@ Success condition:
 - [ ] Restore daily action points
 - [ ] Return to exploration
 - [ ] Increase Duskborn strength
-- [ ] Preserve surviving squads, squad damage, unit-type progression, Mana, Gold and run stats
+- [ ] Preserve surviving squads, squad damage, unit-type progression, Gold and run stats
 - [ ] Add day transition tests
 
 Success condition:
