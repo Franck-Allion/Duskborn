@@ -902,7 +902,7 @@ describe('Combat Model Data structures', () => {
       expect(getOpposingSquadsInLane(enemyArcher, playerSquads)).toEqual([]);
     });
 
-    describe('selectLaneTarget FRONT-priority targeting', () => {
+    describe('selectLaneTarget FRONT-priority and hero fallback targeting', () => {
       // Setup squads
       const playerFront: Squad = {
         unitTypeId: 'guardian',
@@ -933,55 +933,55 @@ describe('Combat Model Data structures', () => {
         // Player attacker in lane 2 targeting enemy
         // Opponents array with [Back, Front] order
         const target1 = selectLaneTarget(playerFront, 'player', [enemyBack, enemyFront]);
-        expect(target1).toBe(enemyFront);
+        expect(target1).toEqual({ type: 'squad', squad: enemyFront });
 
         // Opponents array with [Front, Back] order to verify order independence
         const target2 = selectLaneTarget(playerFront, 'player', [enemyFront, enemyBack]);
-        expect(target2).toBe(enemyFront);
+        expect(target2).toEqual({ type: 'squad', squad: enemyFront });
       });
 
       it('targets FRONT first when both rows are occupied in that column (Enemy Attacker)', () => {
         // Enemy attacker in lane 2 targeting player
         // Opponents array with [Back, Front] order
         const target1 = selectLaneTarget(enemyFront, 'enemy', [playerBack, playerFront]);
-        expect(target1).toBe(playerFront);
+        expect(target1).toEqual({ type: 'squad', squad: playerFront });
 
         // Opponents array with [Front, Back] order to verify order independence
         const target2 = selectLaneTarget(enemyFront, 'enemy', [playerFront, playerBack]);
-        expect(target2).toBe(playerFront);
+        expect(target2).toEqual({ type: 'squad', squad: playerFront });
       });
 
       it('targets BACK when FRONT is empty/absent/dead (Player Attacker)', () => {
         // FRONT is not in opponents array
         const target1 = selectLaneTarget(playerFront, 'player', [enemyBack]);
-        expect(target1).toBe(enemyBack);
+        expect(target1).toEqual({ type: 'squad', squad: enemyBack });
 
         // FRONT is dead (count = 0)
         const deadEnemyFront: Squad = { ...enemyFront, count: 0 };
         const target2 = selectLaneTarget(playerFront, 'player', [enemyBack, deadEnemyFront]);
-        expect(target2).toBe(enemyBack);
+        expect(target2).toEqual({ type: 'squad', squad: enemyBack });
       });
 
       it('targets BACK when FRONT is empty/absent/dead (Enemy Attacker)', () => {
         // FRONT is not in opponents array
         const target1 = selectLaneTarget(enemyFront, 'enemy', [playerBack]);
-        expect(target1).toBe(playerBack);
+        expect(target1).toEqual({ type: 'squad', squad: playerBack });
 
         // FRONT is dead (count = 0)
         const deadPlayerFront: Squad = { ...playerFront, count: 0 };
         const target2 = selectLaneTarget(enemyFront, 'enemy', [playerBack, deadPlayerFront]);
-        expect(target2).toBe(playerBack);
+        expect(target2).toEqual({ type: 'squad', squad: playerBack });
       });
 
       it('targets FRONT when BACK is empty/absent/dead', () => {
         // BACK is not in opponents array
         const target = selectLaneTarget(playerFront, 'player', [enemyFront]);
-        expect(target).toBe(enemyFront);
+        expect(target).toEqual({ type: 'squad', squad: enemyFront });
 
         // BACK is dead (count = 0)
         const deadEnemyBack: Squad = { ...enemyBack, count: 0 };
         const targetDeadBack = selectLaneTarget(playerFront, 'player', [enemyFront, deadEnemyBack]);
-        expect(targetDeadBack).toBe(enemyFront);
+        expect(targetDeadBack).toEqual({ type: 'squad', squad: enemyFront });
       });
 
       it('ignores other lanes completely', () => {
@@ -996,11 +996,45 @@ describe('Combat Model Data structures', () => {
         // Opponents has enemyBack in lane 2, and otherLaneEnemy in lane 4
         // Result should be enemyBack in lane 2 (even though it is BACK and the other is FRONT but in another lane)
         const target = selectLaneTarget(playerFront, 'player', [otherLaneEnemy, enemyBack]);
-        expect(target).toBe(enemyBack);
+        expect(target).toEqual({ type: 'squad', squad: enemyBack });
       });
 
-      it('returns null if no opponents occupy the lane', () => {
+      it('targets the opposing hero directly if the opposing lane is completely empty (Player Attacker)', () => {
         const target = selectLaneTarget(playerFront, 'player', []);
+        expect(target).toEqual({ type: 'hero', side: 'enemy' });
+      });
+
+      it('targets the opposing hero directly if the opposing lane is completely empty (Enemy Attacker)', () => {
+        const target = selectLaneTarget(enemyFront, 'enemy', []);
+        expect(target).toEqual({ type: 'hero', side: 'player' });
+      });
+
+      it('targets the opposing hero directly if all same-lane opposing squads are dead (count = 0)', () => {
+        const deadEnemyFront: Squad = { ...enemyFront, count: 0 };
+        const deadEnemyBack: Squad = { ...enemyBack, count: 0 };
+        const target = selectLaneTarget(playerFront, 'player', [deadEnemyFront, deadEnemyBack]);
+        expect(target).toEqual({ type: 'hero', side: 'enemy' });
+      });
+
+      it('returns null if the attacker has an unplaced position', () => {
+        const unplacedPlayer: Squad = {
+          unitTypeId: 'guardian',
+          count: 8,
+          damagedUnitHp: null,
+          position: null,
+        };
+        const target = selectLaneTarget(unplacedPlayer, 'player', [enemyFront]);
+        expect(target).toBeNull();
+      });
+
+      it('returns null if the attacker has an invalid position', () => {
+        const invalidPlayer: Squad = {
+          unitTypeId: 'guardian',
+          count: 8,
+          damagedUnitHp: null,
+          position: { column: -1, row: 2 },
+        };
+        const target = selectLaneTarget(invalidPlayer, 'player', [enemyFront]);
         expect(target).toBeNull();
       });
     });

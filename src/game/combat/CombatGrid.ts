@@ -302,32 +302,51 @@ export function getOpposingSquadsInLane(
   });
 }
 
+export type CombatTarget =
+  | { type: 'squad'; squad: Squad }
+  | { type: 'hero'; side: CombatSide };
+
 /**
- * Selects a single deterministic target squad from the same combat lane (column) as the attacker.
- * If 0 candidates exist, returns null.
- * If 1 candidate exists, returns that candidate (FRONT or BACK).
- * If 2 candidates exist (both rows occupied in that column), targets the FRONT squad first,
- * regardless of collection order.
+ * Selects a single deterministic target (either a squad or an opposing hero)
+ * from the same combat lane (column) as the attacker.
+ *
+ * If the attacker is unplaced or has an invalid position, returns null.
+ *
+ * If there are no active opposing squads in that lane, returns a hero target
+ * for the opposing side.
+ *
+ * If exactly 1 opposing squad occupies the lane, returns that squad as target.
+ *
+ * If both opposing rows are occupied in that column, returns the FRONT squad as target.
  */
 export function selectLaneTarget(
   attacker: Squad,
   attackerSide: CombatSide,
   opponents: readonly Squad[],
-): Squad | null {
-  const candidates = getOpposingSquadsInLane(attacker, opponents);
-  if (candidates.length === 0) {
+): CombatTarget | null {
+  // First, verify that the attacker has a valid lane. Unpositioned/invalid attackers never target anything.
+  const attackerLane = getSquadLane(attacker);
+  if (attackerLane === null) {
     return null;
-  }
-  if (candidates.length === 1) {
-    return candidates[0];
   }
 
   const opponentSide: CombatSide = attackerSide === 'player' ? 'enemy' : 'player';
+  const candidates = getOpposingSquadsInLane(attacker, opponents);
+
+  if (candidates.length === 0) {
+    // Empty lane fallback -> direct damage targets the opposing hero!
+    return { type: 'hero', side: opponentSide };
+  }
+
+  if (candidates.length === 1) {
+    return { type: 'squad', squad: candidates[0] };
+  }
 
   // Find the candidate that is FRONT.
   const frontCandidate = candidates.find(
     (squad) => getSquadDepthCategory(squad, opponentSide) === 'FRONT',
   );
 
-  return frontCandidate || candidates[0];
+  const selectedSquad = frontCandidate || candidates[0];
+  return { type: 'squad', squad: selectedSquad };
 }
