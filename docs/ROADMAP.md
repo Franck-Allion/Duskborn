@@ -744,13 +744,13 @@ but keep first effects simple.
 * [x] Give Archer at least 2 meaningful abilities
 * [x] Give each Duskborn type at least 1 usable ability
 * [x] Support Mana ability costs
-* [ ] Add at least 3 simple player spells
-* [ ] Add a minimal set of Duskborn spells or deterministic equivalents
-* [ ] Support Mana spell costs
-* [ ] Prevent ability/spell use when Mana is insufficient
-* [ ] Spend Mana only on successful legal actions
+* [x] Add at least 3 simple player spells
+* [x] Add a minimal set of Duskborn spells or deterministic equivalents
+* [x] Support Mana spell costs
+* [x] Prevent ability/spell use when Mana is insufficient
+* [x] Spend Mana only on successful legal actions
 * [ ] Prevent more than one selected attack ability per squad per turn
-* [ ] Allow multiple spells in a turn while Mana permits
+* [x] Allow multiple spells in a turn while Mana permits
 * [ ] Add ability/spell tests
 
 Gold is not a combat action cost in this MVP.

@@ -35,3 +35,17 @@ export const DUSKBORN_ARCHER: UnitType = {
   baseDamage: 5,
   abilities: ['duskborn-archer-shot'],
 };
+
+export const UNIT_TYPES: readonly UnitType[] = [
+  GUARDIAN,
+  ARCHER,
+  DUSKBORN_BRUTE,
+  DUSKBORN_ARCHER,
+];
+
+/**
+ * Registry mapping unit IDs to UnitType definitions for lookup validation.
+ */
+export const UNIT_REGISTRY: ReadonlyMap<string, UnitType> = new Map(
+  UNIT_TYPES.map((unit) => [unit.id, unit]),
+);

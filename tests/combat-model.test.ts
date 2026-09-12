@@ -39,6 +39,8 @@ import {
   createInitialEnemySpellDeck,
   repositionSquad,
   getEngagedColumns,
+  playSpell,
+  tryUseAbility,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -1134,6 +1136,200 @@ describe('Combat Model Data structures', () => {
       expect(endResolution(state)).toBe(true);
       expect(state.phase).toBe('TURN_END');
       expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
+    });
+  });
+
+  describe('Mana-backed combat actions', () => {
+    // Setup helper to create a clean, populated CombatState in ACTION phase
+    function createCleanActionState(): CombatState {
+      return {
+        playerSquads: [
+          {
+            unitTypeId: 'guardian',
+            count: 8,
+            damagedUnitHp: null,
+            position: { column: 2, row: 2 },
+          },
+          {
+            unitTypeId: 'archer',
+            count: 3,
+            damagedUnitHp: null,
+            position: { column: 4, row: 3 },
+          },
+        ],
+        enemySquads: [
+          {
+            unitTypeId: 'duskborn-brute',
+            count: 4,
+            damagedUnitHp: null,
+            position: { column: 2, row: 1 },
+          },
+        ],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: true,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'ACTION', // Starts in ACTION phase
+        playerMana: { current: 3, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: {
+          drawPile: [],
+          hand: ['firebolt', 'barrier', 'battle-cry'], // Started with cards in hand
+          discardPile: [],
+        },
+        enemyDeck: {
+          drawPile: [],
+          hand: ['dusk-strike', 'dark-ward'], // Started with cards in hand
+          discardPile: [],
+        },
+      };
+    }
+
+    it('verifies player and enemy spell sets and costs are valid', () => {
+      // Player spells
+      const firebolt = SPELL_REGISTRY.get('firebolt')!;
+      expect(firebolt).toBeDefined();
+      expect(firebolt.manaCost).toBe(2);
+      expect(firebolt.effectId).toBe('damage');
+
+      const barrier = SPELL_REGISTRY.get('barrier')!;
+      expect(barrier).toBeDefined();
+      expect(barrier.manaCost).toBe(1);
+
+      const battleCry = SPELL_REGISTRY.get('battle-cry')!;
+      expect(battleCry).toBeDefined();
+      expect(battleCry.manaCost).toBe(1);
+
+      // Enemy spells
+      const duskStrike = SPELL_REGISTRY.get('dusk-strike')!;
+      expect(duskStrike).toBeDefined();
+      expect(duskStrike.manaCost).toBe(2);
+
+      const darkWard = SPELL_REGISTRY.get('dark-ward')!;
+      expect(darkWard).toBeDefined();
+      expect(darkWard.manaCost).toBe(1);
+
+      // All spelling costs >= 0
+      for (const spell of SPELLS) {
+        expect(spell.manaCost).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('allows active side to successfully play spells from hand under ACTION phase with correct Mana payment', () => {
+      const state = createCleanActionState();
+
+      // Play 'barrier' (cost 1)
+      expect(playSpell(state, 'player', 'barrier')).toBe(true);
+      expect(state.playerMana.current).toBe(2); // 3 - 1 = 2
+      expect(state.playerDeck.hand).toEqual(['firebolt', 'battle-cry']);
+      expect(state.playerDeck.discardPile).toEqual(['barrier']);
+    });
+
+    it('rejects playing a spell if current Mana is insufficient and leaves state completely unchanged', () => {
+      const state = createCleanActionState();
+      state.playerMana.current = 1; // Not enough for Firebolt (cost 2)
+
+      // Try to play 'firebolt'
+      expect(playSpell(state, 'player', 'firebolt')).toBe(false);
+
+      // Verify no changes (atomic)
+      expect(state.playerMana.current).toBe(1);
+      expect(state.playerDeck.hand).toEqual(['firebolt', 'barrier', 'battle-cry']);
+      expect(state.playerDeck.discardPile).toEqual([]);
+    });
+
+    it('rejects playing a spell if the card is not in hand and leaves state completely unchanged', () => {
+      const state = createCleanActionState();
+
+      // Try to play 'dark-ward' (which is in enemy's hand, not player's)
+      expect(playSpell(state, 'player', 'dark-ward')).toBe(false);
+
+      // Verify no changes (atomic)
+      expect(state.playerMana.current).toBe(3);
+      expect(state.playerDeck.hand).toEqual(['firebolt', 'barrier', 'battle-cry']);
+      expect(state.playerDeck.discardPile).toEqual([]);
+    });
+
+    it('rejects playing a spell if side does not match activeSide', () => {
+      const state = createCleanActionState();
+      state.activeSide = 'player';
+      state.enemyMana.current = 3;
+
+      // Enemy tries to play dusk-strike during player's turn
+      expect(playSpell(state, 'enemy', 'dusk-strike')).toBe(false);
+      expect(state.enemyMana.current).toBe(3); // unchanged
+    });
+
+    it('rejects playing a spell if phase is not ACTION', () => {
+      const state = createCleanActionState();
+      state.phase = 'DEPLOYMENT';
+
+      expect(playSpell(state, 'player', 'barrier')).toBe(false);
+      expect(state.playerMana.current).toBe(3); // unchanged
+    });
+
+    it('allows playing multiple spells in a turn sequentially while Mana permits', () => {
+      const state = createCleanActionState(); // starts with 3 Mana, and hand ['firebolt', 'barrier', 'battle-cry']
+
+      // 1. Play Barrier (cost 1)
+      expect(playSpell(state, 'player', 'barrier')).toBe(true);
+      expect(state.playerMana.current).toBe(2);
+
+      // 2. Play Battle Cry (cost 1)
+      expect(playSpell(state, 'player', 'battle-cry')).toBe(true);
+      expect(state.playerMana.current).toBe(1);
+
+      // 3. Play Firebolt (cost 2) -> should fail (insufficient Mana)
+      expect(playSpell(state, 'player', 'firebolt')).toBe(false);
+      expect(state.playerMana.current).toBe(1); // remains 1
+
+      expect(state.playerDeck.hand).toEqual(['firebolt']);
+      expect(state.playerDeck.discardPile).toEqual(['barrier', 'battle-cry']);
+    });
+
+    it('allows using abilities with correct Mana payment under ACTION phase', () => {
+      const state = createCleanActionState();
+
+      // 1. Guardian Shield Wall (cost 2) -> succeeds
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-shield-wall')).toBe(true);
+      expect(state.playerMana.current).toBe(1); // 3 - 2 = 1
+
+      // 2. Archer Power Shot (cost 1) -> succeeds
+      expect(tryUseAbility(state, 'player', 'archer', 'archer-power-shot')).toBe(true);
+      expect(state.playerMana.current).toBe(0); // 1 - 1 = 0
+
+      // 3. Guardian Strike (cost 0) -> succeeds even with 0 Mana
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-strike')).toBe(true);
+      expect(state.playerMana.current).toBe(0); // unchanged
+    });
+
+    it('rejects using an ability if current Mana is insufficient', () => {
+      const state = createCleanActionState();
+      state.playerMana.current = 1; // Not enough for Shield Wall (cost 2)
+
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-shield-wall')).toBe(false);
+      expect(state.playerMana.current).toBe(1); // unchanged (atomic)
+    });
+
+    it('rejects using an ability if the unit type does not own the ability', () => {
+      const state = createCleanActionState();
+
+      // Archer tries to use Guardian's Shield Wall
+      expect(tryUseAbility(state, 'player', 'archer', 'guardian-shield-wall')).toBe(false);
+      expect(state.playerMana.current).toBe(3); // unchanged
+    });
+
+    it('rejects using an ability if the squad is dead (count = 0)', () => {
+      const state = createCleanActionState();
+      const brute = state.enemySquads.find(s => s.unitTypeId === 'duskborn-brute')!;
+      brute.count = 0; // DEAD
+
+      state.activeSide = 'enemy';
+      state.enemyMana.current = 1;
+
+      expect(tryUseAbility(state, 'enemy', 'duskborn-brute', 'duskborn-brute-strike')).toBe(false);
+      expect(state.enemyMana.current).toBe(1); // unchanged
     });
   });
 

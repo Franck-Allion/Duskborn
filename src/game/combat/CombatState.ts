@@ -6,7 +6,10 @@ import {
 } from './CombatGrid';
 import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
-import { drawSpell } from './SpellDeck';
+import { drawSpell, discardSpell } from './SpellDeck';
+import { SPELL_REGISTRY } from '../content/spells';
+import { ABILITY_REGISTRY } from '../content/abilities';
+import { UNIT_REGISTRY } from '../content/unitTypes';
 
 export type CombatPhase =
   | 'TURN_START'
@@ -377,5 +380,118 @@ export function repositionSquad(
   const squads = side === 'player' ? state.playerSquads : state.enemySquads;
   const squad = squads.find((candidate) => candidate.unitTypeId === unitTypeId)!;
   squad.position = targetPosition;
+  return true;
+}
+
+/**
+ * Plays a spell from the hand for the specified side.
+ * Rules:
+ * - Only legal when state.phase is 'ACTION'.
+ * - Only legal when side matches state.activeSide.
+ * - Spell ID must exist in the spelling registry.
+ * - Spell must be in the side's hand.
+ * - Side must have enough Mana to pay the spell's cost.
+ * - Atomically spends the Mana and discards the spell from hand.
+ * Returns true if successful, or false otherwise.
+ */
+export function playSpell(
+  state: CombatState,
+  side: CombatSide,
+  spellId: string,
+): boolean {
+  // 1. Phase and active side validation
+  if (state.phase !== 'ACTION' || side !== state.activeSide) {
+    return false;
+  }
+
+  // 2. Spell existence validation
+  const spell = SPELL_REGISTRY.get(spellId);
+  if (!spell) {
+    return false;
+  }
+
+  // 3. Hand presence check
+  const deck = side === 'player' ? state.playerDeck : state.enemyDeck;
+  if (!deck.hand.includes(spellId)) {
+    return false;
+  }
+
+  // 4. Mana cost validation
+  const mana = side === 'player' ? state.playerMana : state.enemyMana;
+  if (mana.current < spell.manaCost) {
+    return false;
+  }
+
+  // 5. Spend Mana atomically
+  const spent = spendMana(state, side, spell.manaCost);
+  if (!spent) {
+    return false;
+  }
+
+  // 6. Discard card atomically
+  const discarded = discardSpell(deck, spellId);
+  if (!discarded) {
+    // Rollback Mana in case discard fails
+    mana.current += spell.manaCost;
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Attempts to use an ability for a squad of the specified unit type.
+ * Rules:
+ * - Only legal when state.phase is 'ACTION'.
+ * - Only legal when side matches state.activeSide.
+ * - Unit type must be registered and actually own the ability.
+ * - Squad of that unit type must exist and be surviving (count > 0).
+ * - Ability must exist in the ability registry.
+ * - Side must have enough Mana to pay the ability's cost.
+ * - Atomically spends the Mana.
+ * Returns true if successful, or false otherwise.
+ */
+export function tryUseAbility(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+  abilityId: string,
+): boolean {
+  // 1. Phase and active side validation
+  if (state.phase !== 'ACTION' || side !== state.activeSide) {
+    return false;
+  }
+
+  // 2. Validate unit type exists and owns the ability
+  const unitDef = UNIT_REGISTRY.get(unitTypeId);
+  if (!unitDef || !unitDef.abilities.includes(abilityId)) {
+    return false;
+  }
+
+  // 3. Find the squad of that unit type on the given side
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((s) => s.unitTypeId === unitTypeId);
+  if (!squad || squad.count <= 0) {
+    return false;
+  }
+
+  // 4. Validate ability exists in the registry
+  const abilityDef = ABILITY_REGISTRY.get(abilityId);
+  if (!abilityDef) {
+    return false;
+  }
+
+  // 5. Validate sufficient Mana
+  const mana = side === 'player' ? state.playerMana : state.enemyMana;
+  if (mana.current < abilityDef.manaCost) {
+    return false;
+  }
+
+  // 6. Spend Mana atomically
+  const spent = spendMana(state, side, abilityDef.manaCost);
+  if (!spent) {
+    return false;
+  }
+
   return true;
 }
