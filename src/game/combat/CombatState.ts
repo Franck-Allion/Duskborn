@@ -222,14 +222,36 @@ export function confirmDeployment(state: CombatState): boolean {
 }
 
 /**
+ * Validates the active side's prepared attack without spending Mana or changing state.
+ * Every surviving squad must be positioned and have a registered, owned selection.
+ * Unused Mana, unplayed spells, and dead squads do not block confirmation.
+ */
+export function canConfirmAttack(state: CombatState): boolean {
+  if (state.phase !== 'ACTION') return false;
+  const player = state.activeSide === 'player';
+  const squads = player ? state.playerSquads : state.enemySquads;
+  const selections = player ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
+  return squads.filter((squad) => squad.count > 0).every((squad) => {
+    const abilityId = selections[squad.unitTypeId];
+    const unit = UNIT_REGISTRY.get(squad.unitTypeId);
+    const validPosition = squad.position !== null && (player
+      ? isPlayerDeploymentPosition(squad.position)
+      : isEnemyDeploymentPosition(squad.position));
+    return validPosition && abilityId !== undefined &&
+      ABILITY_REGISTRY.has(abilityId) && !!unit?.abilities.includes(abilityId);
+  });
+}
+
+/**
  * Confirms attack for the active side and transitions to RESOLUTION phase.
  * Transition rules:
  * - Only valid when phase is 'ACTION'.
  * - Transitions state.phase to 'RESOLUTION'.
- * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ * - Requires valid prepared abilities for every surviving active squad.
+ * - Preserves selections for resolution; rejection leaves all state unchanged.
  */
 export function confirmAttack(state: CombatState): boolean {
-  if (state.phase !== 'ACTION') {
+  if (!canConfirmAttack(state)) {
     return false;
   }
 

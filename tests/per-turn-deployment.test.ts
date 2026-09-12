@@ -9,6 +9,7 @@ import {
   endResolution,
   endTurn,
   repositionSquad,
+  tryUseAbility,
   type CombatPhase,
   type CombatState,
 } from '../src/game/combat/CombatState';
@@ -58,6 +59,9 @@ describe('per-turn deployment lifecycle and previews', () => {
     const deployed = structuredClone(state.playerSquads);
     for (const side of ['enemy', 'player'] as const) {
       expect(confirmDeployment(state)).toBe(true);
+      expect(tryUseAbility(state, state.activeSide,
+        side === 'enemy' ? 'guardian' : 'duskborn-brute',
+        side === 'enemy' ? 'guardian-strike' : 'duskborn-brute-strike')).toBe(true);
       expect(confirmAttack(state)).toBe(true);
       expect(endResolution(state)).toBe(true);
       expect(endTurn(state)).toBe(true);

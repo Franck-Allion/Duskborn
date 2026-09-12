@@ -269,7 +269,17 @@ squads during the player's DEPLOYMENT phase. Combat enters that phase through
 `beginTurn()`, refreshing Mana and drawing one spell. Confirm Deployment uses
 the domain transition to ACTION and locks both interaction modes. Positions
 persist, and player interaction becomes available again on a later player
-DEPLOYMENT phase. ACTION gameplay is not yet implemented.
+DEPLOYMENT phase.
+
+During player ACTION, the sidebar shows current/max combat Mana, surviving
+squads' ability choices and locked selections, and clickable spell names with
+Mana costs. The hand uses pages of three cards when needed. Ability and spell
+clicks delegate to the domain and refresh Mana and hand state. A squad cannot
+change its selection during that turn. Confirm Attack rejects incomplete or
+invalid squad selections with a short hint; unused Mana and unplayed spells
+are allowed. Successful confirmation preserves selections and shows a read-only
+RESOLUTION status. Enemy ACTION is also read-only. Damage and spell effects
+are not resolved yet.
 
 Pointer coordinates are converted through the camera, so these interactions
 remain aligned at different window sizes and screen pixel densities. Input

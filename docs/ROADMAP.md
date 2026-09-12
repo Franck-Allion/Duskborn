@@ -811,15 +811,15 @@ confirm the attack
 
 Basic squad attacks remain available even when no Mana is spent.
 
-* [ ] Allow ability selection only during `ACTION`
-* [ ] Allow spell play only during `ACTION`
-* [ ] Display/track selected ability for each active squad
-* [ ] Add Confirm Attack action
-* [ ] Prevent opponent-side actions during the active turn
-* [ ] Prevent deployment changes during `ACTION`
-* [ ] Validate selected actions before confirmation
-* [ ] Prevent further action changes once attack resolution starts
-* [ ] Add action-phase tests
+* [x] Allow ability selection only during `ACTION`
+* [x] Allow spell play only during `ACTION`
+* [x] Display/track selected ability for each active squad
+* [x] Add Confirm Attack action
+* [x] Prevent opponent-side actions during the active turn
+* [x] Prevent deployment changes during `ACTION`
+* [x] Validate selected actions before confirmation
+* [x] Prevent further action changes once attack resolution starts
+* [x] Add action-phase tests
 
 Do not require the player to spend all Mana.
 

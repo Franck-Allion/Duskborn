@@ -1148,6 +1148,8 @@ describe('Combat Model Data structures', () => {
       expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
 
       // Confirm Attack -> RESOLUTION phase
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-strike')).toBe(true);
+      expect(tryUseAbility(state, 'player', 'archer', 'archer-shot')).toBe(true);
       expect(confirmAttack(state)).toBe(true);
       expect(state.phase).toBe('RESOLUTION');
       expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
@@ -1391,6 +1393,7 @@ describe('Combat Model Data structures', () => {
 
       // Transitions for enemy side
       expect(confirmDeployment(state)).toBe(true);
+      expect(tryUseAbility(state, 'enemy', 'duskborn-brute', 'duskborn-brute-strike')).toBe(true);
       expect(confirmAttack(state)).toBe(true);
       expect(endResolution(state)).toBe(true);
       expect(endTurn(state)).toBe(true); // Hand-off back to player

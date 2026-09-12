@@ -20,6 +20,7 @@ import {
 } from '../game/combat/CombatState';
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
+import { CombatActionPanel } from '../ui/CombatActionPanel';
 
 export class CombatScene extends Phaser.Scene {
   private runState!: RunState;
@@ -37,6 +38,8 @@ export class CombatScene extends Phaser.Scene {
   private dragSource: Phaser.GameObjects.Rectangle | null = null;
   private dragSettling = false;
   private deploymentHint!: Phaser.GameObjects.Text;
+  private sidebarTitle!: Phaser.GameObjects.Text;
+  private actionPanel!: CombatActionPanel;
 
   constructor() {
     super('combat');
@@ -125,7 +128,7 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.add
+    this.sidebarTitle = this.add
       .text(740 + 75, 120, 'DEPLOY SQUADS', {
         fontFamily: 'monospace',
         fontSize: '14px',
@@ -133,6 +136,7 @@ export class CombatScene extends Phaser.Scene {
         color: '#e2e8f0', // slate-200
       })
       .setOrigin(0.5);
+    this.actionPanel = new CombatActionPanel(this, () => this.refreshDeploymentUI());
 
     // Grid measurements
     const startY = 122;
@@ -251,6 +255,7 @@ export class CombatScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.BLUR, cancelDrag);
     this.scale.on(Phaser.Scale.Events.RESIZE, cancelDrag);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.actionPanel.clear();
       this.input.off('dragstart', this.startSquadDrag, this);
       this.input.off('drag', this.moveSquadDrag, this);
       this.input.off('dragend', this.endSquadDrag, this);
@@ -329,6 +334,11 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private refreshDeploymentUI(): void {
+    this.actionPanel.clear();
+    this.confirmButtonVisuals.forEach((visual) => visual.destroy());
+    this.confirmButtonVisuals = [];
+    this.sidebarTitle.setText(this.combatState.phase === 'DEPLOYMENT'
+      ? 'DEPLOY SQUADS' : this.combatState.phase === 'ACTION' ? 'PREPARE ATTACK' : 'ATTACK STATUS');
     // 1. Clear old squad markers on grid
     this.squadVisuals.forEach((v) => v.destroy());
     this.squadVisuals = [];
@@ -471,6 +481,19 @@ export class CombatScene extends Phaser.Scene {
         this.squadVisuals.push(nameText, countText);
       }
     });
+
+    if (this.combatState.phase !== 'DEPLOYMENT') {
+      this.deploymentHint.setText(this.combatState.phase === 'ACTION'
+        ? 'Choose squad abilities and spells, then confirm your attack.'
+        : 'Attack confirmed / Resolution pending');
+      this.actionPanel.render(this.combatState);
+      this.refreshPlacementFeedback();
+      const resolution = Math.max(1, Math.ceil(this.cameras.main.zoom));
+      for (const visual of this.squadVisuals) {
+        if (visual instanceof Phaser.GameObjects.Text) visual.setResolution(resolution);
+      }
+      return;
+    }
 
     // 4. Render available squad cards on right sidebar
     const sidebarX = 740;
