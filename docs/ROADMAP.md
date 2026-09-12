@@ -616,10 +616,10 @@ Discard pile
 
 Keep the MVP minimal.
 
-* [ ] Create `SpellDefinition`
-* [ ] Create pure TypeScript spell deck state
-* [ ] Create initial player spell deck
-* [ ] Create initial Duskborn spell deck or deterministic equivalent
+* [x] Create `SpellDefinition`
+* [x] Create pure TypeScript spell deck state
+* [x] Create initial player spell deck
+* [x] Create initial Duskborn spell deck or deterministic equivalent
 * [ ] Draw 1 spell for the active side at `TURN_START`
 * [ ] Put played spells into discard
 * [ ] Define deterministic behavior when draw pile is empty

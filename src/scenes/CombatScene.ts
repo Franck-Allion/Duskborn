@@ -12,6 +12,8 @@ import type { CombatState } from '../game/combat/CombatState';
 import {
   isDeploymentValid,
   DEFAULT_COMBAT_MAX_MANA,
+  createInitialPlayerSpellDeck,
+  createInitialEnemySpellDeck,
 } from '../game/combat/CombatState';
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
@@ -83,6 +85,8 @@ export class CombatScene extends Phaser.Scene {
       phase: 'TURN_START',
       playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      playerDeck: createInitialPlayerSpellDeck(),
+      enemyDeck: createInitialEnemySpellDeck(),
     };
 
     // Outer framing box

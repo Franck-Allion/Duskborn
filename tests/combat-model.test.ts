@@ -35,6 +35,8 @@ import {
   endTurn,
   spendMana,
   DEFAULT_COMBAT_MAX_MANA,
+  createInitialPlayerSpellDeck,
+  createInitialEnemySpellDeck,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -43,6 +45,7 @@ import {
   DUSKBORN_BRUTE,
   GUARDIAN,
 } from '../src/game/content/unitTypes';
+import { SPELLS, SPELL_REGISTRY } from '../src/game/content/spells';
 
 describe('Combat Model Data structures', () => {
   it('defines Guardian with its initial content values', () => {
@@ -132,6 +135,8 @@ describe('Combat Model Data structures', () => {
       phase: 'TURN_START',
       playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      playerDeck: createInitialPlayerSpellDeck(),
+      enemyDeck: createInitialEnemySpellDeck(),
     };
 
     expect(combatState.playerSquads).toHaveLength(1);
@@ -198,6 +203,8 @@ describe('Combat Model Data structures', () => {
       phase: 'TURN_START',
       playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      playerDeck: createInitialPlayerSpellDeck(),
+      enemyDeck: createInitialEnemySpellDeck(),
     };
     expect(isValidCombatState(state)).toBe(true);
 
@@ -296,6 +303,8 @@ describe('Combat Model Data structures', () => {
       phase: 'TURN_START',
       playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      playerDeck: createInitialPlayerSpellDeck(),
+      enemyDeck: createInitialEnemySpellDeck(),
     };
 
     // 1. All positioned legally => valid
@@ -408,6 +417,8 @@ describe('Combat Model Data structures', () => {
       phase: 'TURN_START',
       playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      playerDeck: createInitialPlayerSpellDeck(),
+      enemyDeck: createInitialEnemySpellDeck(),
     };
 
     // Before placing player squads, deployment must be invalid
@@ -453,6 +464,8 @@ describe('Combat Model Data structures', () => {
         phase: 'TURN_START',
         playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
       };
 
       expect(state.activeSide).toBe('player');
@@ -473,6 +486,8 @@ describe('Combat Model Data structures', () => {
         phase: 'TURN_START',
         playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
       };
 
       // 2. TURN_START -> DEPLOYMENT (Player)
@@ -542,6 +557,8 @@ describe('Combat Model Data structures', () => {
         phase: 'TURN_START',
         playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
       };
 
       // 1. From TURN_START, only beginTurn() is valid.
@@ -609,6 +626,8 @@ describe('Combat Model Data structures', () => {
         phase: 'TURN_START',
         playerMana: { current: 1, max: DEFAULT_COMBAT_MAX_MANA },
         enemyMana: { current: 2, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
       };
 
       expect(state.playerMana.max).toBe(DEFAULT_COMBAT_MAX_MANA);
@@ -663,6 +682,68 @@ describe('Combat Model Data structures', () => {
       expect(state.activeSide).toBe('player');
       expect(state.playerMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // Player refreshed to max (3)
       expect(state.enemyMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // Enemy remains at 3 (its previous value)
+    });
+
+    it('models spell definitions and spell decks according to section 0.6.9', () => {
+      // 1. Spell definitions: initial spell IDs are unique, manaCost >= 0, required fields exist
+      const spellIds = SPELLS.map(s => s.id);
+      const uniqueIds = new Set(spellIds);
+      expect(uniqueIds.size).toBe(spellIds.length);
+
+      for (const spell of SPELLS) {
+        expect(spell.id).toBeDefined();
+        expect(spell.name).toBeDefined();
+        expect(spell.manaCost).toBeGreaterThanOrEqual(0);
+        expect(spell.effectId).toBeDefined();
+      }
+
+      // 2. Player deck: drawPile has expected deterministic spell IDs, hand is empty, discardPile is empty
+      const playerDeck = createInitialPlayerSpellDeck();
+      expect(playerDeck.drawPile).toEqual(['firebolt', 'barrier', 'battle-cry']);
+      expect(playerDeck.hand).toEqual([]);
+      expect(playerDeck.discardPile).toEqual([]);
+
+      // 3. Enemy deck: same structure
+      const enemyDeck = createInitialEnemySpellDeck();
+      expect(enemyDeck.drawPile).toEqual(['dusk-strike', 'dark-ward']);
+      expect(enemyDeck.hand).toEqual([]);
+      expect(enemyDeck.discardPile).toEqual([]);
+
+      // 4. Known IDs: Every initial deck spell ID resolves to a valid SpellDefinition
+      for (const id of playerDeck.drawPile) {
+        const spell = SPELL_REGISTRY.get(id);
+        expect(spell).toBeDefined();
+        expect(spell!.id).toBe(id);
+      }
+      for (const id of enemyDeck.drawPile) {
+        const spell = SPELL_REGISTRY.get(id);
+        expect(spell).toBeDefined();
+        expect(spell!.id).toBe(id);
+      }
+
+      // 5. Isolation: Mutating one newly created deck must not mutate another deck
+      const playerDeck2 = createInitialPlayerSpellDeck();
+      playerDeck2.drawPile.push('barrier');
+      expect(playerDeck.drawPile).toEqual(['firebolt', 'barrier', 'battle-cry']); // original remains unaffected
+
+      // Player and enemy deck state must also remain independent
+      const combatState: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+        playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+      };
+
+      combatState.playerDeck.drawPile.push('firebolt');
+      expect(combatState.enemyDeck.drawPile).not.toContain('firebolt'); // enemy deck remains isolated
     });
   });
 

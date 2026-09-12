@@ -21,6 +21,30 @@ export interface CombatMana {
 
 export const DEFAULT_COMBAT_MAX_MANA = 3;
 
+export interface SpellDeckState {
+  drawPile: string[];
+  hand: string[];
+  discardPile: string[];
+}
+
+/** Creates a fresh, deterministic initial spell deck for the player. */
+export function createInitialPlayerSpellDeck(): SpellDeckState {
+  return {
+    drawPile: ['firebolt', 'barrier', 'battle-cry'],
+    hand: [],
+    discardPile: [],
+  };
+}
+
+/** Creates a fresh, deterministic initial spell deck for the enemy/Duskborn. */
+export function createInitialEnemySpellDeck(): SpellDeckState {
+  return {
+    drawPile: ['dusk-strike', 'dark-ward'],
+    hand: [],
+    discardPile: [],
+  };
+}
+
 /** Mutable aggregate representing the current logical state of one combat. */
 export interface CombatState {
   playerSquads: Squad[];
@@ -33,6 +57,8 @@ export interface CombatState {
   phase: CombatPhase;
   playerMana: CombatMana;
   enemyMana: CombatMana;
+  playerDeck: SpellDeckState;
+  enemyDeck: SpellDeckState;
 }
 
 /**
