@@ -682,9 +682,9 @@ Therefore a lane may become empty after an opponent repositions, exposing the op
 * [x] Prevent deployment into an empty column while opposing squads occupy other columns
 * [x] Preserve existing occupancy and deployment-zone validation
 * [x] Prevent deployment changes after entering `ACTION`
-* [ ] Adapt drag-and-drop to player per-turn deployment
-* [ ] Replace/adapt one-time `deploymentConfirmed` semantics to the turn phase model
-* [ ] Add per-turn deployment tests
+* [x] Adapt drag-and-drop to player per-turn deployment
+* [x] Replace/adapt one-time `deploymentConfirmed` semantics to the turn phase model
+* [x] Add per-turn deployment tests
 
 Do not duplicate the existing placement engine.
 

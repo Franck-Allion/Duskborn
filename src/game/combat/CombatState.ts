@@ -54,7 +54,6 @@ export interface CombatState {
   enemySquads: Squad[];
   playerHeroHp: number;
   enemyHeroHp: number;
-  deploymentConfirmed: boolean;
   activeSide: CombatSide;
   turn: number;
   phase: CombatPhase;
@@ -294,7 +293,7 @@ export function getEngagedColumns(
 }
 
 /**
- * Repositions a surviving squad belonging to the active side to a target position.
+ * Checks a potential reposition without mutating state, for previews and commits.
  * Rules:
  * - Only legal when state.phase is 'DEPLOYMENT'.
  * - Only legal when side matches state.activeSide.
@@ -302,10 +301,9 @@ export function getEngagedColumns(
  * - Target position must belong to the side's respective deployment zone.
  * - Target position must not be occupied by any other active squad.
  * - Target position must respect the lane engagement restriction (if the opponent has surviving positioned squads, target column must be occupied by at least one opposing surviving positioned squad).
- * - Mutates only squad.position, preserving unitTypeId, count, and damagedUnitHp.
- * - Atomic: returns false and leaves state completely unchanged on any validation failure.
+ * - Leaves state completely unchanged whether the target is valid or invalid.
  */
-export function repositionSquad(
+export function canRepositionSquad(
   state: CombatState,
   side: CombatSide,
   unitTypeId: string,
@@ -363,7 +361,21 @@ export function repositionSquad(
     }
   }
 
-  // 6. Reposition squad
+  return true;
+}
+
+/** Applies the same rules used by placement previews, mutating only position. */
+export function repositionSquad(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+  targetPosition: CombatPosition,
+): boolean {
+  if (!canRepositionSquad(state, side, unitTypeId, targetPosition)) {
+    return false;
+  }
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((candidate) => candidate.unitTypeId === unitTypeId)!;
   squad.position = targetPosition;
   return true;
 }

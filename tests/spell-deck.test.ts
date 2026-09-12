@@ -19,7 +19,6 @@ function createCombat(): CombatState {
     enemySquads: [],
     playerHeroHp: 100,
     enemyHeroHp: 100,
-    deploymentConfirmed: false,
     activeSide: 'player',
     turn: 1,
     phase: 'TURN_START',

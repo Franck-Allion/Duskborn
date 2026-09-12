@@ -263,7 +263,13 @@ cells are highlighted; the hovered destination turns green when valid and red
 when occupied or in the enemy zone, with an explanatory message. The logical
 position changes only on a valid release. Invalid drops return the preview to
 its source without changing the squad. Escape, window focus loss, or resizing
-cancel the current drag. Confirmation locks both deployment interaction modes.
+cancel the current drag. Both interaction modes use the domain repositioning
+rules, including occupied lanes. They are available only for surviving player
+squads during the player's DEPLOYMENT phase. Combat enters that phase through
+`beginTurn()`, refreshing Mana and drawing one spell. Confirm Deployment uses
+the domain transition to ACTION and locks both interaction modes. Positions
+persist, and player interaction becomes available again on a later player
+DEPLOYMENT phase. ACTION gameplay is not yet implemented.
 
 Pointer coordinates are converted through the camera, so these interactions
 remain aligned at different window sizes and screen pixel densities. Input

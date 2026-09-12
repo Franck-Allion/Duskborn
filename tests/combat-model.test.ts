@@ -131,7 +131,6 @@ describe('Combat Model Data structures', () => {
       enemySquads: [enemySquad],
       playerHeroHp: 100,
       enemyHeroHp: 80,
-      deploymentConfirmed: false,
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
@@ -147,14 +146,13 @@ describe('Combat Model Data structures', () => {
     expect(combatState.enemySquads[0].unitTypeId).toBe('duskborn_grunt');
     expect(combatState.playerHeroHp).toBe(100);
     expect(combatState.enemyHeroHp).toBe(80);
-    expect(combatState.deploymentConfirmed).toBe(false);
     expect(combatState.activeSide).toBe('player');
     expect(combatState.turn).toBe(1);
     expect(combatState.phase).toBe('TURN_START');
 
-    // Can transition deploymentConfirmed to true
-    combatState.deploymentConfirmed = true;
-    expect(combatState.deploymentConfirmed).toBe(true);
+    expect(beginTurn(combatState)).toBe(true);
+    expect(confirmDeployment(combatState)).toBe(true);
+    expect(combatState.phase).toBe('ACTION');
   });
 
   it('enforces one squad per unit type on each side using hasDuplicateUnitTypes', () => {
@@ -199,7 +197,6 @@ describe('Combat Model Data structures', () => {
       ],
       playerHeroHp: 100,
       enemyHeroHp: 100,
-      deploymentConfirmed: false,
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
@@ -299,7 +296,6 @@ describe('Combat Model Data structures', () => {
       enemySquads: [enemySquad],
       playerHeroHp: 100,
       enemyHeroHp: 100,
-      deploymentConfirmed: false,
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
@@ -413,7 +409,6 @@ describe('Combat Model Data structures', () => {
       enemySquads: deployEnemySquads(initialEnemySquads), // deployed deterministically
       playerHeroHp: 100,
       enemyHeroHp: 100,
-      deploymentConfirmed: false,
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
@@ -427,28 +422,25 @@ describe('Combat Model Data structures', () => {
     expect(isDeploymentValid(state)).toBe(false);
 
     // 2. Player deploys squads legally
-    // Place Squad 0 at (2, 2) and Squad 1 at (4, 3)
-    const target0 = { column: 2, row: 2 };
-    const target1 = { column: 4, row: 3 };
+    expect(beginTurn(state)).toBe(true);
+    // Initial enemy deployment engages columns 0 and 1.
+    const target0 = { column: 0, row: 2 };
+    const target1 = { column: 1, row: 3 };
 
-    expect(isValidPlayerPlacement(target0, state.playerSquads, 0)).toBe(true);
-    state.playerSquads[0].position = target0;
+    expect(repositionSquad(state, 'player', 'guardian', target0)).toBe(true);
 
-    expect(isValidPlayerPlacement(target1, state.playerSquads, 1)).toBe(true);
-    state.playerSquads[1].position = target1;
+    expect(repositionSquad(state, 'player', 'archer', target1)).toBe(true);
 
     // Now all squads are legally positioned: player rows 2-3, enemy rows 0-1, no overlaps
     expect(isDeploymentValid(state)).toBe(true);
 
     // 3. Confirm Deployment succeeds
-    state.deploymentConfirmed = true;
-    expect(state.deploymentConfirmed).toBe(true);
+    expect(confirmDeployment(state)).toBe(true);
+    expect(state.phase).toBe('ACTION');
 
     // 4. Post-confirmation lock: any attempts to reposition squads must be ignored/locked
-    const attemptReposition = { column: 0, row: 2 };
-    if (!state.deploymentConfirmed) {
-      state.playerSquads[0].position = attemptReposition;
-    }
+    const attemptReposition = { column: 0, row: 3 };
+    expect(repositionSquad(state, 'player', 'guardian', attemptReposition)).toBe(false);
     // Logical position remains exactly target0, unchanged!
     expect(state.playerSquads[0].position).toEqual(target0);
   });
@@ -460,7 +452,6 @@ describe('Combat Model Data structures', () => {
         enemySquads: [],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
@@ -482,7 +473,6 @@ describe('Combat Model Data structures', () => {
         enemySquads: [],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
@@ -553,7 +543,6 @@ describe('Combat Model Data structures', () => {
         enemySquads: [],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
@@ -622,7 +611,6 @@ describe('Combat Model Data structures', () => {
         enemySquads: [],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
@@ -734,7 +722,6 @@ describe('Combat Model Data structures', () => {
         enemySquads: [],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
@@ -783,7 +770,6 @@ describe('Combat Model Data structures', () => {
         ],
         playerHeroHp: 100,
         enemyHeroHp: 100,
-        deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
         phase: 'DEPLOYMENT', // Starts in DEPLOYMENT phase

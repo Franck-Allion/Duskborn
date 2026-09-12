@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 
 import {
   isPlayerDeploymentPosition,
-  isValidPlayerPlacement,
   deployEnemySquads,
   GRID_COLUMNS,
   GRID_ROWS,
@@ -11,6 +10,10 @@ import type { CombatPosition } from '../game/combat/CombatPosition';
 import type { CombatState } from '../game/combat/CombatState';
 import {
   isDeploymentValid,
+  beginTurn,
+  confirmDeployment,
+  canRepositionSquad,
+  repositionSquad,
   DEFAULT_COMBAT_MAX_MANA,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
@@ -79,7 +82,6 @@ export class CombatScene extends Phaser.Scene {
       ]),
       playerHeroHp: 100,
       enemyHeroHp: 100,
-      deploymentConfirmed: false,
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
@@ -88,6 +90,7 @@ export class CombatScene extends Phaser.Scene {
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
     };
+    beginTurn(this.combatState);
 
     // Outer framing box
     this.add
@@ -268,17 +271,33 @@ export class CombatScene extends Phaser.Scene {
     fitSceneToCanvas(this);
   }
 
+  private canPlayerDeploy(): boolean {
+    return (
+      this.combatState.phase === 'DEPLOYMENT' &&
+      this.combatState.activeSide === 'player'
+    );
+  }
+
+  private canPlacePlayerSquad(
+    index: number,
+    position: CombatPosition,
+  ): boolean {
+    const squad = this.combatState.playerSquads[index];
+    return (
+      !!squad &&
+      canRepositionSquad(this.combatState, 'player', squad.unitTypeId, position)
+    );
+  }
+
   private handleCellClick(pos: CombatPosition): void {
-    if (
-      this.combatState.deploymentConfirmed ||
-      this.currentDragSquadIndex !== null
-    ) {
-      return; // deployment confirmed or drag in progress: lock click placement
+    if (!this.canPlayerDeploy() || this.currentDragSquadIndex !== null) {
+      return; // Outside player deployment or drag in progress: lock click placement.
     }
 
     if (this.selectedSquadIndex === null) {
       const index = this.combatState.playerSquads.findIndex(
         (squad) =>
+          squad.count > 0 &&
           squad.position?.column === pos.column &&
           squad.position.row === pos.row,
       );
@@ -294,20 +313,11 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    // Validate that the target cell belongs to the player deployment zone and is not occupied
-    if (
-      !isValidPlayerPlacement(
-        pos,
-        this.combatState.playerSquads,
-        this.selectedSquadIndex,
-      )
-    ) {
+    // The domain validates and applies both initial placement and repositioning.
+    if (!repositionSquad(this.combatState, 'player', squad.unitTypeId, pos)) {
       this.refreshPlacementFeedback(pos);
       return;
     }
-
-    // Update logical position (single source of truth)
-    squad.position = pos;
 
     // Deselect squad
     this.selectedSquadIndex = null;
@@ -325,15 +335,19 @@ export class CombatScene extends Phaser.Scene {
     this.availableSquadVisuals.forEach((v) => v.destroy());
     this.availableSquadVisuals = [];
 
-    if (this.combatState.deploymentConfirmed) {
+    if (!this.canPlayerDeploy()) {
+      this.selectedSquadIndex = null;
       this.deploymentHint.setText(
-        'Deployment confirmed. Positions are locked.',
+        this.combatState.phase === 'DEPLOYMENT'
+          ? 'Duskborn deployment.'
+          : 'Deployment complete. Positions are locked.',
       );
-    } else if (!this.deploymentHint.text) {
+    } else {
       this.deploymentHint.setText(
-        'Drag squads onto the blue cells, or click to select and place.',
+        'Deploy or reposition squads in lanes occupied by the Duskborn.',
       );
     }
+    this.deploymentHint.setColor('#cbd5e1');
 
     // Reset all grid cell draggability
     for (let r = 0; r < GRID_ROWS; r += 1) {
@@ -342,9 +356,7 @@ export class CombatScene extends Phaser.Scene {
         if (cellRect) {
           cellRect.setAlpha(1);
           cellRect.setInteractive({
-            cursor: this.combatState.deploymentConfirmed
-              ? 'default'
-              : 'pointer',
+            cursor: !this.canPlayerDeploy() ? 'default' : 'pointer',
           });
           this.input.setDraggable(cellRect, false);
           cellRect.setData('squadIndex', undefined);
@@ -353,10 +365,10 @@ export class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Configure draggability of cells containing player squads (if before confirmation)
-    if (!this.combatState.deploymentConfirmed) {
+    // Only surviving player squads are draggable during player deployment.
+    if (this.canPlayerDeploy()) {
       this.combatState.playerSquads.forEach((squad, index) => {
-        if (squad.position !== null) {
+        if (squad.count > 0 && squad.position !== null) {
           const { column, row } = squad.position;
           const cellRect = this.cells[row]?.[column];
           if (cellRect) {
@@ -490,8 +502,8 @@ export class CombatScene extends Phaser.Scene {
         )
         .setStrokeStyle(strokeWidth, strokeColor);
 
-      // Card is only interactive before confirmation
-      if (!this.combatState.deploymentConfirmed) {
+      // Reserve cards follow the same phase and survival rules as grid squads.
+      if (this.canPlayerDeploy() && squad.count > 0) {
         bg.setInteractive({ cursor: 'grab', draggable: true });
         bg.setData('type', 'card');
         bg.setData('squadIndex', index);
@@ -502,6 +514,8 @@ export class CombatScene extends Phaser.Scene {
             pointer.downY,
           );
           if (
+            !this.canPlayerDeploy() ||
+            squad.count <= 0 ||
             this.currentDragSquadIndex !== null ||
             !bg.getBounds().contains(down.x, down.y)
           )
@@ -554,7 +568,7 @@ export class CombatScene extends Phaser.Scene {
     const btnWidth = cardWidth;
     const btnHeight = 40;
 
-    if (!this.combatState.deploymentConfirmed) {
+    if (this.canPlayerDeploy()) {
       // Interactive Confirm Deployment Button
       const btnBg = this.add
         .rectangle(
@@ -577,14 +591,15 @@ export class CombatScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       btnBg.on('pointerdown', () => {
-        if (this.currentDragSquadIndex !== null) return;
+        if (!this.canPlayerDeploy() || this.currentDragSquadIndex !== null)
+          return;
         if (!isDeploymentValid(this.combatState)) {
           this.cameras.main.shake(100, 0.005);
           btnText.setText('Deploy All Squads!');
           btnText.setColor('#f87171'); // red warning text
           // Revert button text after 1.5 seconds
           this.time.delayedCall(1500, () => {
-            if (!this.combatState.deploymentConfirmed && btnText.active) {
+            if (this.canPlayerDeploy() && btnText.active) {
               btnText.setText('Confirm Deployment');
               btnText.setColor('#ffffff');
             }
@@ -592,7 +607,7 @@ export class CombatScene extends Phaser.Scene {
           return;
         }
 
-        this.combatState.deploymentConfirmed = true;
+        if (!confirmDeployment(this.combatState)) return;
         this.selectedSquadIndex = null;
         this.refreshDeploymentUI();
       });
@@ -622,7 +637,9 @@ export class CombatScene extends Phaser.Scene {
         .text(
           btnX + btnWidth / 2,
           btnY + btnHeight / 2,
-          'DEPLOYMENT CONFIRMED',
+          this.combatState.phase === 'DEPLOYMENT'
+            ? 'DUSKBORN DEPLOYMENT'
+            : 'DEPLOYMENT COMPLETE',
           {
             fontFamily: 'monospace',
             fontSize: '11px',
@@ -667,9 +684,11 @@ export class CombatScene extends Phaser.Scene {
   ): void {
     const index = source.getData('squadIndex') as number | undefined;
     if (
-      this.combatState.deploymentConfirmed ||
+      !this.canPlayerDeploy() ||
       this.currentDragSquadIndex !== null ||
-      index === undefined
+      index === undefined ||
+      !this.combatState.playerSquads[index] ||
+      this.combatState.playerSquads[index].count <= 0
     )
       return;
 
@@ -728,11 +747,7 @@ x${squad.count}`,
     const valid =
       target !== null &&
       this.currentDragSquadIndex !== null &&
-      isValidPlayerPlacement(
-        target,
-        this.combatState.playerSquads,
-        this.currentDragSquadIndex,
-      );
+      this.canPlacePlayerSquad(this.currentDragSquadIndex, target);
     const previewBg = this.dragPreview.first as Phaser.GameObjects.Rectangle;
     previewBg.setStrokeStyle(
       2,
@@ -761,13 +776,17 @@ x${squad.count}`,
       return;
     this.dragSettling = true;
     const accepted =
-      !this.combatState.deploymentConfirmed &&
+      this.canPlayerDeploy() &&
       target !== null &&
-      isValidPlayerPlacement(target, this.combatState.playerSquads, index);
+      repositionSquad(
+        this.combatState,
+        'player',
+        this.combatState.playerSquads[index].unitTypeId,
+        target,
+      );
     const destination = accepted
       ? this.cells[target.row][target.column]
       : this.dragSource;
-    if (accepted) this.combatState.playerSquads[index].position = target;
     this.deploymentHint.setText(
       accepted
         ? 'Squad placed. Drag it again to reposition.'
@@ -807,16 +826,8 @@ x${squad.count}`,
         const position = cell.getData('position') as CombatPosition;
         const player = isPlayerDeploymentPosition(position);
         const active =
-          index !== null &&
-          !this.combatState.deploymentConfirmed &&
-          !this.dragSettling;
-        const valid =
-          active &&
-          isValidPlayerPlacement(
-            position,
-            this.combatState.playerSquads,
-            index,
-          );
+          index !== null && this.canPlayerDeploy() && !this.dragSettling;
+        const valid = active && this.canPlacePlayerSquad(index, position);
         const over =
           active &&
           hovered?.column === position.column &&
@@ -839,24 +850,16 @@ x${squad.count}`,
         );
       }
     }
-    if (
-      index !== null &&
-      !this.dragSettling &&
-      !this.combatState.deploymentConfirmed
-    ) {
-      const valid =
-        hovered &&
-        isValidPlayerPlacement(hovered, this.combatState.playerSquads, index);
+    if (index !== null && !this.dragSettling && this.canPlayerDeploy()) {
+      const valid = hovered && this.canPlacePlayerSquad(index, hovered);
       this.deploymentHint.setText(
         hovered
           ? valid
             ? this.currentDragSquadIndex !== null
               ? 'Release to place squad'
               : 'Click to place squad'
-            : isPlayerDeploymentPosition(hovered)
-              ? 'Cell occupied - choose an empty cell'
-              : 'Deploy in the blue player zone'
-          : 'Drag to a blue cell / Esc to cancel',
+            : 'Invalid placement - choose a highlighted cell'
+          : 'Choose a highlighted cell / Esc to cancel',
       );
       this.deploymentHint.setColor(hovered && !valid ? '#fca5a5' : '#cbd5e1');
     }
