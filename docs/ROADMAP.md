@@ -903,17 +903,17 @@ TURN_END
 
 Use deterministic heuristics for the MVP.
 
-* [ ] Reuse the same combat phase system for Duskborn turns
-* [ ] Restore enemy Mana at enemy turn start
-* [ ] Draw enemy spell
-* [ ] Reposition enemy squads using legal deployment rules
-* [ ] Respect lane engagement restrictions
-* [ ] Choose legal squad abilities
-* [ ] Choose legal spells within available Mana
-* [ ] Confirm and resolve enemy attack
-* [ ] Keep initial AI deterministic
-* [ ] Keep AI decision logic independent from Phaser
-* [ ] Add enemy-turn tests
+* [x] Reuse the same combat phase system for Duskborn turns
+* [x] Restore enemy Mana at enemy turn start
+* [x] Draw enemy spell
+* [x] Reposition enemy squads using legal deployment rules
+* [x] Respect lane engagement restrictions
+* [x] Choose legal squad abilities
+* [x] Choose legal spells within available Mana
+* [x] Confirm and resolve enemy attack
+* [x] Keep initial AI deterministic
+* [x] Keep AI decision logic independent from Phaser
+* [x] Add enemy-turn tests
 
 Do not add hidden enemy intentions.
 

@@ -4,8 +4,11 @@ import {
   confirmAttack,
   playSpell,
   tryUseAbility,
+  resolveActiveSideAttack,
+  endTurn,
   type CombatState,
 } from '../game/combat/CombatState';
+import { runEnemyTurn } from '../game/combat/EnemyTurnAI';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
 import { SPELL_REGISTRY } from '../game/content/spells';
 import { UNIT_REGISTRY } from '../game/content/unitTypes';
@@ -113,15 +116,68 @@ export class CombatActionPanel {
         canConfirmAttack(state) ? 0xea580c : 0x334155,
       );
     } else {
-      this.text(
-        y,
-        state.phase === 'RESOLUTION'
-          ? 'Attack confirmed.\nResolution pending.'
-          : player
-            ? `Phase: ${state.phase}`
-            : 'Duskborn turn.',
-        '#94a3b8',
-      );
+      if (state.activeSide === 'player') {
+        if (state.phase === 'RESOLUTION') {
+          this.button(
+            470,
+            'Resolve Attack',
+            () => {
+              if (resolveActiveSideAttack(state)) {
+                this.refresh();
+              }
+            },
+            0xea580c,
+          );
+        } else if (state.phase === 'TURN_END') {
+          this.button(
+            470,
+            'End Turn',
+            () => {
+              if (endTurn(state)) {
+                this.refresh();
+              }
+            },
+            0x10b981, // green-500
+          );
+        } else {
+          this.text(
+            y,
+            `Phase: ${state.phase}`,
+            '#94a3b8',
+          );
+        }
+      } else {
+        // Enemy Turn
+        if (state.phase === 'DEPLOYMENT') {
+          this.button(
+            470,
+            'Run Duskborn Turn',
+            () => {
+              if (runEnemyTurn(state)) {
+                this.refresh();
+              }
+            },
+            0xd97706, // amber-600
+          );
+        } else if (state.phase === 'TURN_END') {
+          this.button(
+            470,
+            'Next Turn',
+            () => {
+              if (endTurn(state)) {
+                this.refresh();
+              }
+            },
+            0x10b981, // green-500
+          );
+        } else {
+          this.text(
+            y,
+            `Duskborn Phase: ${state.phase}`,
+            '#94a3b8',
+          );
+        }
+      }
     }
   }
 
