@@ -582,15 +582,15 @@ or equivalent.
 
 Both sides use the same Mana rules.
 
-* [ ] Add player combat Mana
-* [ ] Add enemy combat Mana
-* [ ] Restore active side Mana to maximum at `TURN_START`
-* [ ] Allow actions to spend current Mana
-* [ ] Prevent Mana from dropping below 0
-* [ ] Prevent actions when Mana cost cannot be paid
-* [ ] Ensure unused current Mana does not accumulate beyond max
-* [ ] Clarify/separate combat Mana from existing persistent `RunState` Mana semantics
-* [ ] Add combat Mana tests
+* [x] Add player combat Mana
+* [x] Add enemy combat Mana
+* [x] Restore active side Mana to maximum at `TURN_START`
+* [x] Allow actions to spend current Mana
+* [x] Prevent Mana from dropping below 0
+* [x] Prevent actions when Mana cost cannot be paid
+* [x] Ensure unused current Mana does not accumulate beyond max
+* [x] Clarify/separate combat Mana from existing persistent `RunState` Mana semantics
+* [x] Add combat Mana tests
 
 The existing exploration `Mana` resource must not accidentally become both a persistent currency and an automatically refreshed combat resource.
 

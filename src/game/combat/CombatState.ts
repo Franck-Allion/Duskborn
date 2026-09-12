@@ -14,6 +14,13 @@ export type CombatPhase =
   | 'VICTORY'
   | 'DEFEAT';
 
+export interface CombatMana {
+  current: number;
+  max: number;
+}
+
+export const DEFAULT_COMBAT_MAX_MANA = 3;
+
 /** Mutable aggregate representing the current logical state of one combat. */
 export interface CombatState {
   playerSquads: Squad[];
@@ -24,6 +31,8 @@ export interface CombatState {
   activeSide: CombatSide;
   turn: number;
   phase: CombatPhase;
+  playerMana: CombatMana;
+  enemyMana: CombatMana;
 }
 
 /**
@@ -110,6 +119,7 @@ export function isDeploymentValid(state: CombatState): boolean {
  * Transition rules:
  * - Only valid when phase is 'TURN_START'.
  * - Transitions state.phase to 'DEPLOYMENT'.
+ * - Restores the active side's Mana to maximum.
  * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
  */
 export function beginTurn(state: CombatState): boolean {
@@ -117,7 +127,43 @@ export function beginTurn(state: CombatState): boolean {
     return false;
   }
 
+  // Restore active side's Mana to maximum
+  if (state.activeSide === 'player') {
+    state.playerMana.current = state.playerMana.max;
+  } else {
+    state.enemyMana.current = state.enemyMana.max;
+  }
+
   state.phase = 'DEPLOYMENT';
+  return true;
+}
+
+/**
+ * Spends a specified amount of combat Mana for the given side.
+ * Rules:
+ * - Cost must be non-negative (amount >= 0).
+ * - Side must have sufficient current Mana to pay the cost.
+ * - Current Mana must never drop below 0.
+ * - Atomic: if payment fails, current Mana remains unchanged.
+ * - Zero cost succeeds without changing Mana.
+ * Returns true if the cost was successfully paid, or false otherwise.
+ */
+export function spendMana(
+  state: CombatState,
+  side: CombatSide,
+  amount: number,
+): boolean {
+  if (amount < 0) {
+    return false;
+  }
+
+  const mana = side === 'player' ? state.playerMana : state.enemyMana;
+
+  if (mana.current < amount) {
+    return false;
+  }
+
+  mana.current -= amount;
   return true;
 }
 

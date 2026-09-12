@@ -33,6 +33,8 @@ import {
   confirmAttack,
   endResolution,
   endTurn,
+  spendMana,
+  DEFAULT_COMBAT_MAX_MANA,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -128,6 +130,8 @@ describe('Combat Model Data structures', () => {
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
+      playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
     };
 
     expect(combatState.playerSquads).toHaveLength(1);
@@ -192,6 +196,8 @@ describe('Combat Model Data structures', () => {
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
+      playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
     };
     expect(isValidCombatState(state)).toBe(true);
 
@@ -288,6 +294,8 @@ describe('Combat Model Data structures', () => {
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
+      playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
     };
 
     // 1. All positioned legally => valid
@@ -398,6 +406,8 @@ describe('Combat Model Data structures', () => {
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
+      playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
     };
 
     // Before placing player squads, deployment must be invalid
@@ -441,6 +451,8 @@ describe('Combat Model Data structures', () => {
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
+        playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       };
 
       expect(state.activeSide).toBe('player');
@@ -459,6 +471,8 @@ describe('Combat Model Data structures', () => {
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
+        playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       };
 
       // 2. TURN_START -> DEPLOYMENT (Player)
@@ -526,6 +540,8 @@ describe('Combat Model Data structures', () => {
         activeSide: 'player',
         turn: 1,
         phase: 'TURN_START',
+        playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       };
 
       // 1. From TURN_START, only beginTurn() is valid.
@@ -578,6 +594,75 @@ describe('Combat Model Data structures', () => {
       expect(confirmAttack(state)).toBe(false);
       expect(endResolution(state)).toBe(false);
       expect(state.phase).toBe('TURN_END'); // unchanged
+    });
+
+    it('models combat Mana refresh and spending operations according to section 0.6.8', () => {
+      // 1. Initial Pools: player and enemy pools exist
+      const state: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+        playerMana: { current: 1, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 2, max: DEFAULT_COMBAT_MAX_MANA },
+      };
+
+      expect(state.playerMana.max).toBe(DEFAULT_COMBAT_MAX_MANA);
+      expect(state.enemyMana.max).toBe(DEFAULT_COMBAT_MAX_MANA);
+
+      // 2. TURN_START -> DEPLOYMENT (Player active)
+      // Player Mana refreshes to max, Enemy Mana remains unchanged
+      expect(beginTurn(state)).toBe(true);
+      expect(state.playerMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // refreshed to max (3)
+      expect(state.enemyMana.current).toBe(2); // unchanged
+
+      // 3. Spend valid amount
+      expect(spendMana(state, 'player', 2)).toBe(true);
+      expect(state.playerMana.current).toBe(1); // 3 - 2 = 1
+
+      // 4. Spend exact remaining amount
+      expect(spendMana(state, 'player', 1)).toBe(true);
+      expect(state.playerMana.current).toBe(0); // 1 - 1 = 0
+
+      // 5. Spend zero succeeds without changing Mana
+      expect(spendMana(state, 'player', 0)).toBe(true);
+      expect(state.playerMana.current).toBe(0); // unchanged
+
+      // 6. Insufficient Mana fails cleanly
+      expect(spendMana(state, 'player', 2)).toBe(false);
+      expect(state.playerMana.current).toBe(0); // unchanged
+
+      // 7. Negative cost rejected without mutation
+      expect(spendMana(state, 'player', -1)).toBe(false);
+      expect(state.playerMana.current).toBe(0); // unchanged
+
+      // 8. Side isolation: spending player Mana does not change enemy Mana
+      expect(state.enemyMana.current).toBe(2);
+
+      // Spending enemy Mana
+      expect(spendMana(state, 'enemy', 1)).toBe(true);
+      expect(state.enemyMana.current).toBe(1); // 2 - 1 = 1
+      expect(state.playerMana.current).toBe(0); // player unchanged
+
+      // 9. No overflow on refresh
+      // Transition resolution and turn end
+      state.phase = 'TURN_END';
+      // endTurn triggers player -> enemy handoff, increments turn to 2, and runs beginTurn() which refreshes activeSide (enemy) Mana to max
+      expect(endTurn(state)).toBe(true);
+      expect(state.activeSide).toBe('enemy');
+      expect(state.enemyMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // Refreshed to max (3)
+      expect(state.playerMana.current).toBe(0); // Player unchanged (still 0)
+
+      // Turn starts again back to player (turn 3)
+      state.phase = 'TURN_END';
+      expect(endTurn(state)).toBe(true);
+      expect(state.activeSide).toBe('player');
+      expect(state.playerMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // Player refreshed to max (3)
+      expect(state.enemyMana.current).toBe(DEFAULT_COMBAT_MAX_MANA); // Enemy remains at 3 (its previous value)
     });
   });
 

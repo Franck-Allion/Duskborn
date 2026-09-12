@@ -9,7 +9,10 @@ import {
 } from '../game/combat/CombatGrid';
 import type { CombatPosition } from '../game/combat/CombatPosition';
 import type { CombatState } from '../game/combat/CombatState';
-import { isDeploymentValid } from '../game/combat/CombatState';
+import {
+  isDeploymentValid,
+  DEFAULT_COMBAT_MAX_MANA,
+} from '../game/combat/CombatState';
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 
@@ -78,6 +81,8 @@ export class CombatScene extends Phaser.Scene {
       activeSide: 'player',
       turn: 1,
       phase: 'TURN_START',
+      playerMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+      enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
     };
 
     // Outer framing box
