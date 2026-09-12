@@ -80,7 +80,11 @@ Success condition:
 
 ---
 
-# 0.4 Basic Resources
+# 0.4 Exploration Resources
+
+The exploration layer provides resources that later support recruitment, spell acquisition, events, and run progression.
+
+Existing resource work remains valid.
 
 - [x] Add Gold to RunState
 - [x] Add Mana to RunState
@@ -88,14 +92,46 @@ Success condition:
 - [x] Display resources in HUD
 - [x] Add Gold tile
 - [ ] Add Mana tile
-- [ ] Add Army tile
-- [ ] Collect resource when entering tile
+- [ ] Replace the planned generic Army tile with a Rally / Recruitment tile
+- [ ] Collect resource when entering a collectible tile
 - [ ] Remove or mark collected tile
+- [ ] Keep exploration Mana distinct from automatically refreshed Combat Mana
+- [ ] Define how the existing Army value coexists with typed combat squads
 - [ ] Add resource tests
+
+### Resource roles
+
+For the MVP:
+
+```text
+Gold
+→ shops
+→ recruits
+→ spells
+→ economy choices
+
+Exploration Mana
+→ magical exploration rewards/events
+→ spell-related economy where useful
+
+Combat Mana
+→ refreshed each combat turn
+→ pays for spells and squad abilities
+
+Army
+→ existing run-level resource
+→ must progressively integrate with typed squad recruitment
+```
+
+Do not use the exploration Mana value directly as the refreshed combat Mana pool.
+
+The existing `Army` state must remain compatible while typed recruitment is introduced.
+
+Prefer gradually making the actual player roster of typed squads the authoritative combat-army representation rather than creating a second unrelated army model.
 
 Success condition:
 
-> Exploration provides meaningful rewards.
+> Exploration provides resources that feed directly into the player's evolving army, spell deck, and run economy.
 
 ---
 
@@ -124,7 +160,7 @@ Success condition:
 
 The combat system should validate tactical depth without becoming a full tactical RPG.
 
-The combat model is now based on alternating turns inspired by a simplified card battler.
+The combat model is based on alternating turns inspired by a simplified card battler.
 
 Core combat principles:
 
@@ -346,7 +382,7 @@ Success condition:
 * [x] Define player deployment zone as 6 × 2
 * [x] Define enemy deployment zone as 6 × 2
 * [x] Prevent invalid positions
-* [x] Prevent two squads occupying the same cell
+* [x] Prevent two squads occupying same cell
 * [x] Add grid tests
 * [x] Render combat grid in CombatScene
 
@@ -473,28 +509,6 @@ Find surviving opposing squads in same lane
 ```
 
 Targeting works symmetrically for both sides.
-
-Example:
-
-```text
-Player Archer
-      ↓
-Enemy Guardian FRONT
-Enemy Mage BACK
-
-=> Guardian targeted
-```
-
-Example:
-
-```text
-Player Archer
-      ↓
-empty
-empty
-
-=> Enemy Hero targeted
-```
 
 The existing targeting system determines targets.
 
@@ -991,7 +1005,7 @@ Success condition:
 
 ---
 
-## 0.6.18 Combat UI Pass
+## 0.6.18 Combat UI and Replaceable Visual Assets
 
 Keep UI simple but readable.
 
@@ -1024,18 +1038,100 @@ Add/display:
 * [ ] attack/result feedback
 * [ ] victory / defeat panel
 
-Example squad display:
+### Replaceable unit and spell PNG assets
 
-```text
-Guardians ×8
-7/10 HP
+Units and spells must be represented visually, not only by text.
+
+Use replaceable PNG assets so placeholder artwork can later be replaced without changing game logic.
+
+Content definitions should reference their visual asset.
+
+Example direction:
+
+```ts
+interface UnitTypeDefinition {
+  id: string;
+  name: string;
+  hpPerUnit: number;
+  baseDamage: number;
+  abilities: string[];
+  imageKey: string;
+}
 ```
 
-Do not prioritize final art, animation, or sound yet.
+Example:
+
+```ts
+interface SpellDefinition {
+  id: string;
+  name: string;
+  manaCost: number;
+  imageKey: string;
+}
+```
+
+Exact structure may follow existing content architecture.
+
+The important direction is:
+
+```text
+game logic
+    ↓
+content definition
+    ↓
+imageKey / asset reference
+    ↓
+PNG loaded by Phaser
+```
+
+Do not hard-code unit-specific or spell-specific image paths throughout scenes.
+
+* [ ] Add visual asset reference to unit-type content definitions
+* [ ] Add visual asset reference to spell content definitions
+* [ ] Create placeholder PNG asset for Guardian
+* [ ] Create placeholder PNG asset for Archer
+* [ ] Create placeholder PNG asset for Duskborn Brute
+* [ ] Create placeholder PNG asset for Duskborn Archer
+* [ ] Create placeholder PNG assets for initial spells
+* [ ] Define consistent unit-image dimensions/aspect ratio
+* [ ] Define consistent spell-card image dimensions/aspect ratio
+* [ ] Load content images through Phaser preload flow
+* [ ] Provide a safe placeholder/fallback image when an asset is missing
+* [ ] Render unit images on combat squad representations
+* [ ] Render spell images in the combat hand
+* [ ] Keep names, counts, HP and Mana costs readable alongside imagery
+* [ ] Verify replacing a PNG does not require TypeScript changes
+
+Prefer an asset organization such as:
+
+```text
+public/
+  assets/
+    units/
+      guardian.png
+      archer.png
+      duskborn-brute.png
+      duskborn-archer.png
+
+    spells/
+      firebolt.png
+      barrier.png
+      battle-cry.png
+```
+
+Do not bake dynamic information into PNG files.
+
+Keep these as UI:
+
+* HP;
+* unit count;
+* level;
+* Mana cost;
+* temporary buffs/debuffs.
 
 Success condition:
 
-> The player can understand whose turn it is, what phase is active, what Mana is available, and what actions are legal without reading debug output.
+> The player can understand the complete combat state visually, and unit/spell artwork can be replaced without modifying game logic.
 
 ---
 
@@ -1110,24 +1206,365 @@ Success condition:
 
 ---
 
-# 0.7 New Day Loop
+# 0.7 New Day and Exploration Growth Loop
+
+The post-combat loop must return the player to exploration while preserving meaningful consequences and newly acquired tactical options.
+
+## 0.7.1 New Day Transition
 
 - [ ] On victory, increment day
 - [ ] Restore daily action points
 - [ ] Return to exploration
 - [ ] Increase Duskborn strength
-- [ ] Preserve surviving squads, squad damage, unit-type progression, Gold and run stats
+- [ ] Preserve surviving squads
+- [ ] Preserve squad damage
+- [ ] Preserve unit-type progression
+- [ ] Preserve acquired spells
+- [ ] Preserve Gold and exploration resources
+- [ ] Preserve run stats
 - [ ] Add day transition tests
+
+Do not preserve `currentCombatMana` across combat/exploration.
+
+Combat Mana is reconstructed/refreshed from combat rules.
 
 Success condition:
 
-> Day 1 → combat → Day 2 → combat → Day 3 works continuously.
+> Day 1 → combat → Day 2 → combat → Day 3 works continuously with persistent run progression.
 
 This is the first major gameplay milestone.
 
 Question to validate:
 
 > Does the player want to play one more day?
+
+---
+
+## 0.7.2 Run Roster
+
+The player owns a run-level roster of typed squads.
+
+The combat rule remains:
+
+> One indivisible squad per unit type.
+
+Examples:
+
+```text
+Guardians ×8
+Archers ×3
+```
+
+Recruiting additional units of an already-owned type increases that squad's count.
+
+Example:
+
+```text
+Guardians ×8
+Recruit 2 Guardians
+↓
+Guardians ×10
+```
+
+Recruiting a new unit type creates that type's single squad.
+
+Example:
+
+```text
+Current roster:
+Guardians ×8
+Archers ×3
+
+Recruit:
+Arcanists ×2
+
+Result:
+Guardians ×8
+Archers ×3
+Arcanists ×2
+```
+
+- [ ] Create run-level typed player roster if not already represented appropriately
+- [ ] Persist roster between exploration and combat
+- [ ] Preserve surviving squad counts after combat
+- [ ] Recruiting an existing unit type increases its squad count
+- [ ] Recruiting a new unit type creates exactly one squad for that type
+- [ ] Preserve the one-squad-per-unit-type invariant
+- [ ] Ensure recruited units inherit current unit-type progression
+- [ ] Integrate or migrate the existing generic `Army` RunState value without breaking existing behavior
+- [ ] Display current roster during exploration
+- [ ] Add roster tests
+
+Success condition:
+
+> The army used in combat is progressively built and reinforced through exploration during the run.
+
+---
+
+## 0.7.3 Rally and Recruitment Locations
+
+Add exploration locations where units may join the player's army.
+
+For the MVP, one `Rally` tile/location is enough.
+
+Example:
+
+```text
+RALLY POINT
+
+3 Guardians offer to join you.
+
+Recruit
+→ Guardians +3
+```
+
+Possible later variations:
+
+```text
+Mercenary Camp
+Refugees
+Barracks
+Faction recruitment
+```
+
+- [ ] Add Rally / Recruitment exploration tile type
+- [ ] Render Rally tile on exploration map
+- [ ] Open simple recruitment interaction when entered
+- [ ] Offer at least one unit type
+- [ ] Add recruits to the run roster
+- [ ] Support reinforcing an existing squad
+- [ ] Support recruiting a unit type not currently owned
+- [ ] Mark consumed one-use Rally locations as resolved
+- [ ] Prevent collecting the same recruitment reward repeatedly
+- [ ] Add recruitment tests
+
+Keep the first implementation deterministic and simple.
+
+Do not implement faction reputation or complex recruitment tables yet.
+
+Success condition:
+
+> Exploration can directly increase or diversify the player's combat army.
+
+---
+
+## 0.7.4 Shops
+
+Add a simple exploration shop that turns Gold into meaningful run progression.
+
+The first shop may sell:
+
+```text
+Recruits
+Spells
+```
+
+Example:
+
+```text
+TRAVELLING MERCHANT
+
+Guardian ×2
+Cost: 4 Gold
+
+Firebolt
+Cost: 3 Gold
+
+Frost Ward
+Cost: 3 Gold
+```
+
+Keep initial inventories deliberately small.
+
+- [ ] Add Shop exploration tile/location
+- [ ] Create shop inventory model independent from Phaser
+- [ ] Generate deterministic/fixed MVP shop inventory
+- [ ] Support recruit offers
+- [ ] Support spell offers
+- [ ] Display Gold while shopping
+- [ ] Prevent purchase when Gold is insufficient
+- [ ] Deduct Gold only after successful purchase
+- [ ] Add purchased recruits to roster
+- [ ] Add purchased spells to run spell collection/deck
+- [ ] Remove or mark one-time offers after purchase where appropriate
+- [ ] Add shop tests
+
+Do not add:
+- rerolls;
+- rarity systems;
+- discounts;
+- reputation;
+- complex procedural pricing;
+
+until the basic economy proves interesting.
+
+Success condition:
+
+> Gold collected during exploration can be converted into new tactical options before future battles.
+
+---
+
+## 0.7.5 Spell Collection During a Run
+
+The player's combat spell deck evolves during exploration.
+
+Spells may be obtained from:
+
+```text
+shops
+magical locations
+events
+combat rewards later
+```
+
+For the MVP, Shops plus one exploration reward source are enough.
+
+Example:
+
+```text
+Current deck:
+Firebolt
+Barrier
+Battle Cry
+
+Find:
+Chain Lightning
+
+New deck:
+Firebolt
+Barrier
+Battle Cry
+Chain Lightning
+```
+
+- [ ] Store acquired player spells in run state
+- [ ] Connect run spell collection to the combat spell deck
+- [ ] Add purchased spells to the run deck
+- [ ] Add at least one non-shop exploration source of a spell
+- [ ] Define whether duplicate spells are allowed in the MVP
+- [ ] Preserve acquired spells between days
+- [ ] Preserve acquired spells between exploration and combat
+- [ ] Display owned spell collection during exploration
+- [ ] Add spell-acquisition tests
+
+Keep deck management minimal initially.
+
+Do not add:
+- deck size optimization screens;
+- sideboards;
+- card crafting;
+- card upgrading;
+- rarity;
+
+until the basic draw/play loop is validated.
+
+Success condition:
+
+> Exploring the map changes the tactical spell options available in future combats.
+
+---
+
+## 0.7.6 Exploration Reward Choices
+
+Introduce simple reward choices where useful.
+
+Example:
+
+```text
+You discover survivors and an abandoned grimoire.
+
+Choose one:
+
+Guardians ×3
+
+OR
+
+Firebolt
+```
+
+This should remain a lightweight reusable system.
+
+- [ ] Create simple exploration reward-choice model
+- [ ] Support unit recruitment reward
+- [ ] Support spell reward
+- [ ] Support Gold reward
+- [ ] Support exploration Mana reward
+- [ ] Present 2 simple choices when appropriate
+- [ ] Apply exactly one selected reward
+- [ ] Prevent collecting both choices
+- [ ] Add reward-choice tests
+
+Use reward choices sparingly.
+
+Not every map tile needs a modal.
+
+Success condition:
+
+> Exploration occasionally asks the player to choose between army growth, spell options, and economy.
+
+---
+
+## 0.7.7 Exploration Visual Content
+
+Units and spells shown during exploration must reuse the same content definitions and PNG assets used by combat.
+
+Do not build a second exploration-only image registry.
+
+- [ ] Render unit PNGs in the exploration roster
+- [ ] Render unit PNGs in Rally / Recruitment offers
+- [ ] Render unit PNGs in Shop recruit offers
+- [ ] Render spell PNGs in Shop spell offers
+- [ ] Render spell PNGs in exploration reward choices
+- [ ] Render spell PNGs in the owned spell collection
+- [ ] Use fallback assets when content artwork is unavailable
+- [ ] Keep dynamic information as UI text, not baked into PNGs
+- [ ] Verify the same asset key can be used across combat and exploration
+
+Success condition:
+
+> Recruits and spells are visually recognizable everywhere they appear, using one replaceable content-asset system.
+
+---
+
+## 0.7.8 Exploration Collection Review
+
+Before adding more exploration content, review the loop:
+
+```text
+Explore
+↓
+Collect Gold / resources
+↓
+Find recruits
+↓
+Find / buy spells
+↓
+Improve roster and deck
+↓
+End Day
+↓
+Fight Duskborn
+↓
+Survive
+↓
+Explore again
+```
+
+Review:
+
+- [ ] Does finding recruits feel valuable?
+- [ ] Does reinforcing an existing squad compete with gaining a new unit type?
+- [ ] Are spell rewards exciting without overwhelming the player?
+- [ ] Does Gold create interesting shop decisions?
+- [ ] Are Rally locations meaningfully different from Shops?
+- [ ] Does exploration materially change the next combat?
+- [ ] Is the current roster easy to understand?
+- [ ] Is the current spell collection easy to understand?
+- [ ] Are there enough choices without turning exploration into menu management?
+
+Success condition:
+
+> The player explores because the map contains meaningful ways to build the army and spell deck needed to survive future nights.
 
 ---
 
@@ -1141,6 +1578,18 @@ Question to validate:
 - [ ] Make Might influence combat
 - [ ] Make Magic influence at least one gameplay outcome
 - [ ] Add progression tests
+
+Consider later whether Might influences:
+- unit effectiveness;
+- recruitment quality;
+- squad progression;
+
+and whether Magic influences:
+- max Combat Mana;
+- spell acquisition;
+- spell effects;
+
+but keep the first implementation simple.
 
 Success condition:
 
@@ -1156,6 +1605,8 @@ Success condition:
 - [ ] Add one Might-oriented event
 - [ ] Add one Magic-oriented event
 - [ ] Add one Economy-oriented event
+- [ ] Add at least one event that can reward recruits
+- [ ] Add at least one event that can reward a spell
 - [ ] Apply event results
 - [ ] Add event tests
 
@@ -1202,6 +1653,8 @@ Apprentice Crystal
 Captain Banner
 +3 Army
 ```
+
+As the typed roster becomes authoritative, re-evaluate generic `+Army` effects so artifacts can eventually reinforce typed squads or recruitment systems instead of maintaining duplicate army concepts.
 
 Success condition:
 
@@ -1256,6 +1709,13 @@ Keep balancing intentionally simple.
 - [ ] Prevent duplicate unlocks
 - [ ] Add unlock tests
 
+Later unlock categories may include:
+- new unit types;
+- new spells;
+- new shop/reward content;
+
+but do not expand unlock scope until the core run loop is validated.
+
 Success condition:
 
 > Finishing runs expands future strategic possibilities.
@@ -1270,7 +1730,7 @@ Success condition:
 - [ ] Apply artifact when creating RunState
 - [ ] Verify Traveler Boots changes daily actions
 - [ ] Verify Apprentice Crystal changes starting Magic
-- [ ] Verify Captain Banner changes starting Army
+- [ ] Verify Captain Banner changes starting Army or its eventual typed-roster equivalent
 - [ ] Add tests
 
 Success condition:
@@ -1300,6 +1760,7 @@ Success condition:
 - [ ] Filter loot pool using MetaState
 - [ ] Keep locked loot unavailable
 - [ ] Make unlocked loot eligible
+- [ ] Support future unit/spell unlocks without duplicating loot filtering rules
 - [ ] Add tests
 
 Success condition:
@@ -1318,8 +1779,15 @@ Review:
 - [ ] Are 3 actions per day enough?
 - [ ] Does End Day create tension?
 - [ ] Is mandatory Duskborn combat enjoyable?
-- [ ] Does Might vs Magic create real choices?
+- [ ] Does per-turn squad positioning create meaningful choices?
+- [ ] Does spell draw and Mana allocation create meaningful choices?
+- [ ] Does Might vs Magic create real build directions?
 - [ ] Is Economy worth investing in?
+- [ ] Are Shops useful without dominating exploration?
+- [ ] Are Rally locations exciting?
+- [ ] Does acquiring new spells change combat decisions?
+- [ ] Does recruiting/reinforcing units change combat decisions?
+- [ ] Are unit and spell images readable and easy to replace?
 - [ ] Do artifacts change decisions?
 - [ ] Does meta progression make another run attractive?
 - [ ] Are runs too long?
@@ -1340,13 +1808,13 @@ More Duskborn types
 Bosses
 More artifacts
 More spells
+More unit types
 Hero classes
 Factions
 Biomes
 Procedural map generation
 Rare events
 Status effects
-Unit types
 Advanced combat
 Buildings
 Resource generation
@@ -1355,6 +1823,14 @@ Daily modifiers
 Achievements
 Run seeds
 Deck / spell drafting
+Spell rarity
+Card upgrades
+Faction recruitment
+Shop rerolls
+Procedural shop inventories
+Equipment
+Animated unit portraits
+VFX / SFX
 ```
 
 Implement only when the validated core loop justifies them.
