@@ -673,11 +673,11 @@ A squad already occupying a lane is not automatically moved when the opponent la
 
 Therefore a lane may become empty after an opponent repositions, exposing the opposing hero to direct damage.
 
-* [ ] Reuse existing deployment APIs for per-turn repositioning
-* [ ] Allow deployment only during the active side's `DEPLOYMENT` phase
-* [ ] Allow surviving player squads to be repositioned each player turn
-* [ ] Allow surviving enemy squads to be repositioned each enemy turn
-* [ ] Preserve squad count and partial HP while repositioning
+* [x] Reuse existing deployment APIs for per-turn repositioning
+* [x] Allow deployment only during the active side's `DEPLOYMENT` phase
+* [x] Allow surviving player squads to be repositioned each player turn
+* [x] Allow surviving enemy squads to be repositioned each enemy turn
+* [x] Preserve squad count and partial HP while repositioning
 * [ ] Apply lane engagement restriction
 * [ ] Prevent deployment into an empty column while opposing squads occupy other columns
 * [ ] Preserve existing occupancy and deployment-zone validation

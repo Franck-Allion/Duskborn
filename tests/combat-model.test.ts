@@ -37,6 +37,7 @@ import {
   DEFAULT_COMBAT_MAX_MANA,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
+  repositionSquad,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -744,6 +745,160 @@ describe('Combat Model Data structures', () => {
 
       combatState.playerDeck.drawPile.push('firebolt');
       expect(combatState.enemyDeck.drawPile).not.toContain('firebolt'); // enemy deck remains isolated
+    });
+  });
+
+  describe('Combat squad per-turn repositioning', () => {
+    // Setup helper to create a clean, populated CombatState
+    function createCleanCombatState(): CombatState {
+      return {
+        playerSquads: [
+          {
+            unitTypeId: 'guardian',
+            count: 8,
+            damagedUnitHp: 4,
+            position: { column: 2, row: 2 }, // Player Front
+          },
+          {
+            unitTypeId: 'archer',
+            count: 3,
+            damagedUnitHp: null,
+            position: { column: 4, row: 3 }, // Player Back
+          },
+        ],
+        enemySquads: [
+          {
+            unitTypeId: 'duskborn-brute',
+            count: 4,
+            damagedUnitHp: null,
+            position: { column: 2, row: 1 }, // Enemy Front
+          },
+          {
+            unitTypeId: 'duskborn-archer',
+            count: 2,
+            damagedUnitHp: 5,
+            position: { column: 4, row: 0 }, // Enemy Back
+          },
+        ],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'DEPLOYMENT', // Starts in DEPLOYMENT phase
+        playerMana: { current: 3, max: DEFAULT_COMBAT_MAX_MANA },
+        enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+      };
+    }
+
+    it('allows player to reposition surviving player squads within the player deployment zone during player DEPLOYMENT phase', () => {
+      const state = createCleanCombatState();
+
+      // Move Guardian from (2, 2) to (3, 3) (valid player deployment cell)
+      const targetPos = { column: 3, row: 3 };
+      const success = repositionSquad(state, 'player', 'guardian', targetPos);
+
+      expect(success).toBe(true);
+      const guardian = state.playerSquads.find(s => s.unitTypeId === 'guardian')!;
+      expect(guardian.position).toEqual(targetPos);
+
+      // Verify that count, damagedUnitHp, and identity are preserved perfectly
+      expect(guardian.count).toBe(8);
+      expect(guardian.damagedUnitHp).toBe(4);
+    });
+
+    it('allows enemy to reposition surviving enemy squads within the enemy deployment zone during enemy DEPLOYMENT phase', () => {
+      const state = createCleanCombatState();
+      state.activeSide = 'enemy';
+
+      // Move Duskborn Brute from (2, 1) to (3, 0) (valid enemy deployment cell)
+      const targetPos = { column: 3, row: 0 };
+      const success = repositionSquad(state, 'enemy', 'duskborn-brute', targetPos);
+
+      expect(success).toBe(true);
+      const brute = state.enemySquads.find(s => s.unitTypeId === 'duskborn-brute')!;
+      expect(brute.position).toEqual(targetPos);
+
+      // Verify that count, damagedUnitHp, and identity are preserved perfectly
+      expect(brute.count).toBe(4);
+      expect(brute.damagedUnitHp).toBeNull();
+    });
+
+    it('rejects repositioning if side does not match activeSide', () => {
+      const state = createCleanCombatState();
+      // activeSide is player, but attempting enemy move
+      const targetPos = { column: 1, row: 0 };
+      const success = repositionSquad(state, 'enemy', 'duskborn-brute', targetPos);
+
+      expect(success).toBe(false);
+      const brute = state.enemySquads.find(s => s.unitTypeId === 'duskborn-brute')!;
+      expect(brute.position).toEqual({ column: 2, row: 1 }); // unchanged
+    });
+
+    it('rejects repositioning if phase is not DEPLOYMENT', () => {
+      const state = createCleanCombatState();
+      // Change phase to ACTION
+      state.phase = 'ACTION';
+
+      const targetPos = { column: 3, row: 3 };
+      const success = repositionSquad(state, 'player', 'guardian', targetPos);
+
+      expect(success).toBe(false);
+      const guardian = state.playerSquads.find(s => s.unitTypeId === 'guardian')!;
+      expect(guardian.position).toEqual({ column: 2, row: 2 }); // unchanged
+    });
+
+    it('rejects repositioning of dead squads (count = 0)', () => {
+      const state = createCleanCombatState();
+      const guardian = state.playerSquads.find(s => s.unitTypeId === 'guardian')!;
+      guardian.count = 0; // Squad is dead
+
+      const targetPos = { column: 3, row: 3 };
+      const success = repositionSquad(state, 'player', 'guardian', targetPos);
+
+      expect(success).toBe(false);
+      expect(guardian.position).toEqual({ column: 2, row: 2 }); // unchanged
+    });
+
+    it('rejects player moves into enemy rows and enemy moves into player rows', () => {
+      const state = createCleanCombatState();
+
+      // Player attempts to move into Enemy row 1
+      const playerToEnemyCell = { column: 2, row: 1 };
+      const successPlayer = repositionSquad(state, 'player', 'guardian', playerToEnemyCell);
+      expect(successPlayer).toBe(false);
+      expect(state.playerSquads[0].position).toEqual({ column: 2, row: 2 }); // unchanged
+
+      // Enemy attempts to move into Player row 2
+      state.activeSide = 'enemy';
+      const enemyToPlayerCell = { column: 2, row: 2 };
+      const successEnemy = repositionSquad(state, 'enemy', 'duskborn-brute', enemyToPlayerCell);
+      expect(successEnemy).toBe(false);
+      expect(state.enemySquads[0].position).toEqual({ column: 2, row: 1 }); // unchanged
+    });
+
+    it('rejects moves into cells occupied by other squads', () => {
+      const state = createCleanCombatState();
+
+      // Player archer is at (4, 3). Guardian attempts to move there.
+      const occupiedCell = { column: 4, row: 3 };
+      const success = repositionSquad(state, 'player', 'guardian', occupiedCell);
+
+      expect(success).toBe(false);
+      expect(state.playerSquads[0].position).toEqual({ column: 2, row: 2 }); // unchanged
+    });
+
+    it('succeeds with no-op if moving a squad to its current cell', () => {
+      const state = createCleanCombatState();
+
+      // Guardian is currently at (2, 2)
+      const currentCell = { column: 2, row: 2 };
+      const success = repositionSquad(state, 'player', 'guardian', currentCell);
+
+      expect(success).toBe(true);
+      expect(state.playerSquads[0].position).toEqual(currentCell);
     });
   });
 

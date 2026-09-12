@@ -1,8 +1,10 @@
 import {
   isPlayerDeploymentPosition,
   isEnemyDeploymentPosition,
+  isCombatPositionOccupied,
   type CombatSide,
 } from './CombatGrid';
+import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
 import { drawSpell } from './SpellDeck';
 
@@ -270,4 +272,70 @@ export function endTurn(state: CombatState): boolean {
 
   // Immediately begin the next turn to arrive in DEPLOYMENT
   return beginTurn(state);
+}
+
+/**
+ * Repositions a surviving squad belonging to the active side to a target position.
+ * Rules:
+ * - Only legal when state.phase is 'DEPLOYMENT'.
+ * - Only legal when side matches state.activeSide.
+ * - Only legal for surviving squads (squad.count > 0).
+ * - Target position must belong to the side's respective deployment zone.
+ * - Target position must not be occupied by any other active squad.
+ * - Mutates only squad.position, preserving unitTypeId, count, and damagedUnitHp.
+ * - Atomic: returns false and leaves state completely unchanged on any validation failure.
+ */
+export function repositionSquad(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+  targetPosition: CombatPosition,
+): boolean {
+  // 1. Phase and active side validation
+  if (state.phase !== 'DEPLOYMENT' || side !== state.activeSide) {
+    return false;
+  }
+
+  // 2. Deployment zone check
+  if (side === 'player') {
+    if (!isPlayerDeploymentPosition(targetPosition)) {
+      return false;
+    }
+  } else {
+    if (!isEnemyDeploymentPosition(targetPosition)) {
+      return false;
+    }
+  }
+
+  // 3. Find the squad belonging to the requesting side
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((s) => s.unitTypeId === unitTypeId);
+  if (!squad) {
+    return false;
+  }
+
+  // 4. Validate squad is surviving (count > 0)
+  if (squad.count <= 0) {
+    return false;
+  }
+
+  // 5. Occupancy check, filtering out the moving squad itself
+  const allSquads = [...state.playerSquads, ...state.enemySquads];
+  const otherSquads = allSquads.filter(
+    (s) =>
+      !(
+        s.unitTypeId === unitTypeId &&
+        (side === 'player'
+          ? state.playerSquads.includes(s)
+          : state.enemySquads.includes(s))
+      ),
+  );
+
+  if (isCombatPositionOccupied(targetPosition, otherSquads)) {
+    return false;
+  }
+
+  // 6. Reposition squad
+  squad.position = targetPosition;
+  return true;
 }
