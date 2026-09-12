@@ -620,11 +620,11 @@ Keep the MVP minimal.
 * [x] Create pure TypeScript spell deck state
 * [x] Create initial player spell deck
 * [x] Create initial Duskborn spell deck or deterministic equivalent
-* [ ] Draw 1 spell for the active side at `TURN_START`
-* [ ] Put played spells into discard
-* [ ] Define deterministic behavior when draw pile is empty
-* [ ] Keep spell/deck logic independent from Phaser
-* [ ] Add spell draw/deck tests
+* [x] Draw 1 spell for the active side at `TURN_START`
+* [x] Put played spells into discard
+* [x] Define deterministic behavior when draw pile is empty
+* [x] Keep spell/deck logic independent from Phaser
+* [x] Add spell draw/deck tests
 
 Avoid for the MVP:
 

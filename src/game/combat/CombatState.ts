@@ -4,6 +4,7 @@ import {
   type CombatSide,
 } from './CombatGrid';
 import type { Squad } from './Squad';
+import { drawSpell } from './SpellDeck';
 
 export type CombatPhase =
   | 'TURN_START'
@@ -146,6 +147,7 @@ export function isDeploymentValid(state: CombatState): boolean {
  * - Only valid when phase is 'TURN_START'.
  * - Transitions state.phase to 'DEPLOYMENT'.
  * - Restores the active side's Mana to maximum.
+ * - Draws one spell for the active side, if available, before deployment.
  * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
  */
 export function beginTurn(state: CombatState): boolean {
@@ -159,6 +161,8 @@ export function beginTurn(state: CombatState): boolean {
   } else {
     state.enemyMana.current = state.enemyMana.max;
   }
+
+  drawSpell(state.activeSide === 'player' ? state.playerDeck : state.enemyDeck);
 
   state.phase = 'DEPLOYMENT';
   return true;
