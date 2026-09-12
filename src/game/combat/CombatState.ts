@@ -275,6 +275,25 @@ export function endTurn(state: CombatState): boolean {
 }
 
 /**
+ * Retrieves the columns currently occupied by at least one opposing surviving positioned squad.
+ * If side is 'player', looks at enemy squads.
+ * If side is 'enemy', looks at player squads.
+ * For the purposes of lane engagement, opposing squads must have count > 0 and position !== null.
+ */
+export function getEngagedColumns(
+  state: CombatState,
+  side: CombatSide,
+): number[] {
+  const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
+  const activeOpponents = opponents.filter(
+    (s) => s.count > 0 && s.position !== null,
+  );
+
+  const columns = activeOpponents.map((s) => s.position!.column);
+  return Array.from(new Set(columns));
+}
+
+/**
  * Repositions a surviving squad belonging to the active side to a target position.
  * Rules:
  * - Only legal when state.phase is 'DEPLOYMENT'.
@@ -282,6 +301,7 @@ export function endTurn(state: CombatState): boolean {
  * - Only legal for surviving squads (squad.count > 0).
  * - Target position must belong to the side's respective deployment zone.
  * - Target position must not be occupied by any other active squad.
+ * - Target position must respect the lane engagement restriction (if the opponent has surviving positioned squads, target column must be occupied by at least one opposing surviving positioned squad).
  * - Mutates only squad.position, preserving unitTypeId, count, and damagedUnitHp.
  * - Atomic: returns false and leaves state completely unchanged on any validation failure.
  */
@@ -333,6 +353,14 @@ export function repositionSquad(
 
   if (isCombatPositionOccupied(targetPosition, otherSquads)) {
     return false;
+  }
+
+  // 5.5 Lane engagement validation
+  const engagedColumns = getEngagedColumns(state, side);
+  if (engagedColumns.length > 0) {
+    if (!engagedColumns.includes(targetPosition.column)) {
+      return false;
+    }
   }
 
   // 6. Reposition squad

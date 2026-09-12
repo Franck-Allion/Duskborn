@@ -38,6 +38,7 @@ import {
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
   repositionSquad,
+  getEngagedColumns,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -793,8 +794,9 @@ describe('Combat Model Data structures', () => {
       };
     }
 
-    it('allows player to reposition surviving player squads within the player deployment zone during player DEPLOYMENT phase', () => {
+    it('allows player to reposition surviving player squads within the player deployment zone when no lane restrictions apply', () => {
       const state = createCleanCombatState();
+      state.enemySquads = []; // No opposing squads -> no lane restrictions
 
       // Move Guardian from (2, 2) to (3, 3) (valid player deployment cell)
       const targetPos = { column: 3, row: 3 };
@@ -809,9 +811,10 @@ describe('Combat Model Data structures', () => {
       expect(guardian.damagedUnitHp).toBe(4);
     });
 
-    it('allows enemy to reposition surviving enemy squads within the enemy deployment zone during enemy DEPLOYMENT phase', () => {
+    it('allows enemy to reposition surviving enemy squads within the enemy deployment zone when no lane restrictions apply', () => {
       const state = createCleanCombatState();
       state.activeSide = 'enemy';
+      state.playerSquads = []; // No opposing squads -> no lane restrictions
 
       // Move Duskborn Brute from (2, 1) to (3, 0) (valid enemy deployment cell)
       const targetPos = { column: 3, row: 0 };
@@ -828,6 +831,7 @@ describe('Combat Model Data structures', () => {
 
     it('rejects repositioning if side does not match activeSide', () => {
       const state = createCleanCombatState();
+      state.playerSquads = []; // Remove player squads to eliminate lane restrictions
       // activeSide is player, but attempting enemy move
       const targetPos = { column: 1, row: 0 };
       const success = repositionSquad(state, 'enemy', 'duskborn-brute', targetPos);
@@ -839,6 +843,7 @@ describe('Combat Model Data structures', () => {
 
     it('rejects repositioning if phase is not DEPLOYMENT', () => {
       const state = createCleanCombatState();
+      state.enemySquads = []; // Remove enemy squads to eliminate lane restrictions
       // Change phase to ACTION
       state.phase = 'ACTION';
 
@@ -852,6 +857,7 @@ describe('Combat Model Data structures', () => {
 
     it('rejects repositioning of dead squads (count = 0)', () => {
       const state = createCleanCombatState();
+      state.enemySquads = []; // Remove enemy squads to eliminate lane restrictions
       const guardian = state.playerSquads.find(s => s.unitTypeId === 'guardian')!;
       guardian.count = 0; // Squad is dead
 
@@ -881,6 +887,7 @@ describe('Combat Model Data structures', () => {
 
     it('rejects moves into cells occupied by other squads', () => {
       const state = createCleanCombatState();
+      state.enemySquads = []; // Remove enemy squads to eliminate lane restrictions
 
       // Player archer is at (4, 3). Guardian attempts to move there.
       const occupiedCell = { column: 4, row: 3 };
@@ -899,6 +906,195 @@ describe('Combat Model Data structures', () => {
 
       expect(success).toBe(true);
       expect(state.playerSquads[0].position).toEqual(currentCell);
+    });
+
+    it('enforces the lane engagement restriction symmetrically according to section 0.6.10', () => {
+      // Setup state where opponent (enemy) is positioned in columns 1 and 4
+      const state = createCleanCombatState();
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: { column: 1, row: 1 }, // Column 1
+        },
+        {
+          unitTypeId: 'duskborn-archer',
+          count: 2,
+          damagedUnitHp: null,
+          position: { column: 4, row: 0 }, // Column 4
+        },
+      ];
+
+      // Engaged columns for player side are [1, 4]
+      expect(getEngagedColumns(state, 'player')).toEqual([1, 4]);
+
+      // 1. Player reposition to Column 1 is allowed
+      expect(repositionSquad(state, 'player', 'guardian', { column: 1, row: 2 })).toBe(true);
+
+      // 2. Player reposition to Column 4 is allowed
+      expect(repositionSquad(state, 'player', 'archer', { column: 4, row: 3 })).toBe(true);
+
+      // 3. Player reposition to other columns (0, 2, 3, 5) is rejected
+      expect(repositionSquad(state, 'player', 'guardian', { column: 0, row: 2 })).toBe(false);
+      expect(repositionSquad(state, 'player', 'guardian', { column: 2, row: 2 })).toBe(false);
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 3 })).toBe(false);
+      expect(repositionSquad(state, 'player', 'guardian', { column: 5, row: 3 })).toBe(false);
+
+      // 4. Symmetrical: enemy deployment against player squads
+      // Clear enemy squads and place player squads in columns 0 and 5
+      state.activeSide = 'enemy';
+      state.phase = 'DEPLOYMENT';
+      state.playerSquads = [
+        {
+          unitTypeId: 'guardian',
+          count: 8,
+          damagedUnitHp: null,
+          position: { column: 0, row: 2 }, // Column 0
+        },
+        {
+          unitTypeId: 'archer',
+          count: 3,
+          damagedUnitHp: null,
+          position: { column: 5, row: 3 }, // Column 5
+        },
+      ];
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: { column: 0, row: 1 },
+        },
+      ];
+
+      expect(getEngagedColumns(state, 'enemy')).toEqual([0, 5]);
+
+      // Enemy moves to Column 5 is allowed
+      expect(repositionSquad(state, 'enemy', 'duskborn-brute', { column: 5, row: 0 })).toBe(true);
+      // Enemy moves to Column 3 is rejected
+      expect(repositionSquad(state, 'enemy', 'duskborn-brute', { column: 3, row: 1 })).toBe(false);
+    });
+
+    it('ignores dead opposing squads for lane engagement', () => {
+      const state = createCleanCombatState();
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 0, // DEAD
+          damagedUnitHp: null,
+          position: { column: 2, row: 1 },
+        },
+      ];
+
+      // No engaged columns since the opponent squad is dead
+      expect(getEngagedColumns(state, 'player')).toEqual([]);
+
+      // Therefore, moving to column 3 is allowed
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 3 })).toBe(true);
+    });
+
+    it('ignores unpositioned opposing squads for lane engagement', () => {
+      const state = createCleanCombatState();
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: null, // UNPOSITIONED
+        },
+      ];
+
+      // No engaged columns since the opponent squad is unpositioned
+      expect(getEngagedColumns(state, 'player')).toEqual([]);
+
+      // Therefore, moving to column 3 is allowed
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 3 })).toBe(true);
+    });
+
+    it('allows a squad to remain in its current lane even if that lane becomes empty', () => {
+      const state = createCleanCombatState();
+      // Initially, player Guardian is in column 2.
+      // Now, all enemy squads in column 2 are removed or dead.
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-archer',
+          count: 2,
+          damagedUnitHp: null,
+          position: { column: 4, row: 0 },
+        },
+      ];
+
+      // Opponent only has squads in Column 4.
+      expect(getEngagedColumns(state, 'player')).toEqual([4]);
+
+      // Guardian is currently in column 2, which is now unengaged.
+      // But we did not trigger repositionSquad, so its position remains legally (2, 2).
+      const guardian = state.playerSquads.find(s => s.unitTypeId === 'guardian')!;
+      expect(guardian.position).toEqual({ column: 2, row: 2 });
+    });
+
+    it('enforces lane engagement when moving a squad out of an empty lane', () => {
+      const state = createCleanCombatState();
+      // Guardian is in column 2.
+      // Enemy squads only occupy columns 1 and 4.
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: { column: 1, row: 1 },
+        },
+        {
+          unitTypeId: 'duskborn-archer',
+          count: 2,
+          damagedUnitHp: null,
+          position: { column: 4, row: 0 },
+        },
+      ];
+
+      // Attempting to move Guardian to Column 5 (unengaged) is rejected
+      expect(repositionSquad(state, 'player', 'guardian', { column: 5, row: 2 })).toBe(false);
+      // Attempting to move Guardian to Column 1 (engaged) is allowed
+      expect(repositionSquad(state, 'player', 'guardian', { column: 1, row: 2 })).toBe(true);
+    });
+
+    it('allows FRONT/BACK switching within the same legally engaged column', () => {
+      const state = createCleanCombatState();
+      // Opponent is in Column 2.
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 4,
+          damagedUnitHp: null,
+          position: { column: 2, row: 1 },
+        },
+      ];
+
+      // Guardian is currently at (2, 2) (Front row). Target is (2, 3) (Back row).
+      expect(repositionSquad(state, 'player', 'guardian', { column: 2, row: 3 })).toBe(true);
+    });
+
+    it('locks deployment repositioning completely after entering ACTION or later phases', () => {
+      const state = createCleanCombatState();
+      state.enemySquads = []; // No lane restrictions
+
+      // Confirm Deployment -> advances phase to ACTION
+      expect(confirmDeployment(state)).toBe(true);
+      expect(state.phase).toBe('ACTION');
+
+      // Reposition is rejected under ACTION phase
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
+
+      // Confirm Attack -> RESOLUTION phase
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
+
+      // End Resolution -> TURN_END phase
+      expect(endResolution(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+      expect(repositionSquad(state, 'player', 'guardian', { column: 3, row: 2 })).toBe(false);
     });
   });
 

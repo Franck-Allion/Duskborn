@@ -678,10 +678,10 @@ Therefore a lane may become empty after an opponent repositions, exposing the op
 * [x] Allow surviving player squads to be repositioned each player turn
 * [x] Allow surviving enemy squads to be repositioned each enemy turn
 * [x] Preserve squad count and partial HP while repositioning
-* [ ] Apply lane engagement restriction
-* [ ] Prevent deployment into an empty column while opposing squads occupy other columns
-* [ ] Preserve existing occupancy and deployment-zone validation
-* [ ] Prevent deployment changes after entering `ACTION`
+* [x] Apply lane engagement restriction
+* [x] Prevent deployment into an empty column while opposing squads occupy other columns
+* [x] Preserve existing occupancy and deployment-zone validation
+* [x] Prevent deployment changes after entering `ACTION`
 * [ ] Adapt drag-and-drop to player per-turn deployment
 * [ ] Replace/adapt one-time `deploymentConfirmed` semantics to the turn phase model
 * [ ] Add per-turn deployment tests
