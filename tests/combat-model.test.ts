@@ -28,6 +28,7 @@ import {
   hasDuplicateUnitTypes,
   isValidCombatState,
   isDeploymentValid,
+  beginTurn,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -120,6 +121,9 @@ describe('Combat Model Data structures', () => {
       playerHeroHp: 100,
       enemyHeroHp: 80,
       deploymentConfirmed: false,
+      activeSide: 'player',
+      turn: 1,
+      phase: 'TURN_START',
     };
 
     expect(combatState.playerSquads).toHaveLength(1);
@@ -129,6 +133,9 @@ describe('Combat Model Data structures', () => {
     expect(combatState.playerHeroHp).toBe(100);
     expect(combatState.enemyHeroHp).toBe(80);
     expect(combatState.deploymentConfirmed).toBe(false);
+    expect(combatState.activeSide).toBe('player');
+    expect(combatState.turn).toBe(1);
+    expect(combatState.phase).toBe('TURN_START');
 
     // Can transition deploymentConfirmed to true
     combatState.deploymentConfirmed = true;
@@ -178,6 +185,9 @@ describe('Combat Model Data structures', () => {
       playerHeroHp: 100,
       enemyHeroHp: 100,
       deploymentConfirmed: false,
+      activeSide: 'player',
+      turn: 1,
+      phase: 'TURN_START',
     };
     expect(isValidCombatState(state)).toBe(true);
 
@@ -271,6 +281,9 @@ describe('Combat Model Data structures', () => {
       playerHeroHp: 100,
       enemyHeroHp: 100,
       deploymentConfirmed: false,
+      activeSide: 'player',
+      turn: 1,
+      phase: 'TURN_START',
     };
 
     // 1. All positioned legally => valid
@@ -378,6 +391,9 @@ describe('Combat Model Data structures', () => {
       playerHeroHp: 100,
       enemyHeroHp: 100,
       deploymentConfirmed: false,
+      activeSide: 'player',
+      turn: 1,
+      phase: 'TURN_START',
     };
 
     // Before placing player squads, deployment must be invalid
@@ -408,6 +424,60 @@ describe('Combat Model Data structures', () => {
     }
     // Logical position remains exactly target0, unchanged!
     expect(state.playerSquads[0].position).toEqual(target0);
+  });
+
+  describe('Combat turn state and transition rules', () => {
+    it('initializes combat state deterministically with the player active, turn 1, and phase TURN_START', () => {
+      const state: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+      };
+
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(1);
+      expect(state.phase).toBe('TURN_START');
+    });
+
+    it('transitions successfully from TURN_START to DEPLOYMENT on beginTurn', () => {
+      const state: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+      };
+
+      const success = beginTurn(state);
+      expect(success).toBe(true);
+      expect(state.phase).toBe('DEPLOYMENT');
+      expect(state.turn).toBe(1); // turn does not increment yet
+    });
+
+    it('rejects beginTurn transition and leaves state unchanged if current phase is not TURN_START', () => {
+      const state: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        deploymentConfirmed: false,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'DEPLOYMENT', // Not TURN_START
+      };
+
+      const success = beginTurn(state);
+      expect(success).toBe(false);
+      expect(state.phase).toBe('DEPLOYMENT'); // unchanged
+    });
   });
 
   describe('CombatGrid helpers', () => {

@@ -1,8 +1,18 @@
 import {
   isPlayerDeploymentPosition,
   isEnemyDeploymentPosition,
+  type CombatSide,
 } from './CombatGrid';
 import type { Squad } from './Squad';
+
+export type CombatPhase =
+  | 'TURN_START'
+  | 'DEPLOYMENT'
+  | 'ACTION'
+  | 'RESOLUTION'
+  | 'TURN_END'
+  | 'VICTORY'
+  | 'DEFEAT';
 
 /** Mutable aggregate representing the current logical state of one combat. */
 export interface CombatState {
@@ -11,6 +21,9 @@ export interface CombatState {
   playerHeroHp: number;
   enemyHeroHp: number;
   deploymentConfirmed: boolean;
+  activeSide: CombatSide;
+  turn: number;
+  phase: CombatPhase;
 }
 
 /**
@@ -89,5 +102,21 @@ export function isDeploymentValid(state: CombatState): boolean {
     return false;
   }
 
+  return true;
+}
+
+/**
+ * Begins the turn for the active side.
+ * Transition rules:
+ * - Only valid when phase is 'TURN_START'.
+ * - Transitions state.phase to 'DEPLOYMENT'.
+ * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ */
+export function beginTurn(state: CombatState): boolean {
+  if (state.phase !== 'TURN_START') {
+    return false;
+  }
+
+  state.phase = 'DEPLOYMENT';
   return true;
 }

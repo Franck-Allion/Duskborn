@@ -541,12 +541,12 @@ type CombatPhase =
 
 Exact naming may follow existing project conventions.
 
-* [ ] Add active side to `CombatState`
-* [ ] Add combat turn number to `CombatState`
-* [ ] Add explicit combat phase to `CombatState`
-* [ ] Start combat with the player as active side
-* [ ] Implement `TURN_START`
-* [ ] Transition `TURN_START → DEPLOYMENT`
+* [x] Add active side to `CombatState`
+* [x] Add combat turn number to `CombatState`
+* [x] Add explicit combat phase to `CombatState`
+* [x] Start combat with the player as active side
+* [x] Implement `TURN_START`
+* [x] Transition `TURN_START → DEPLOYMENT`
 * [ ] Transition `DEPLOYMENT → ACTION`
 * [ ] Add Confirm Attack transition from `ACTION → RESOLUTION`
 * [ ] Transition `RESOLUTION → TURN_END`

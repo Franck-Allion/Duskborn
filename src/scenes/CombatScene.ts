@@ -75,6 +75,9 @@ export class CombatScene extends Phaser.Scene {
       playerHeroHp: 100,
       enemyHeroHp: 100,
       deploymentConfirmed: false,
+      activeSide: 'player',
+      turn: 1,
+      phase: 'TURN_START',
     };
 
     // Outer framing box
