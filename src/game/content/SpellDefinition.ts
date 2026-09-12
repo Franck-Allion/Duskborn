@@ -3,4 +3,5 @@ export interface SpellDefinition {
   readonly name: string;
   readonly manaCost: number;
   readonly effectId: string;
+  readonly effectValue?: number;
 }

@@ -5,6 +5,7 @@ export const FIREBOLT: SpellDefinition = {
   name: 'Firebolt',
   manaCost: 2,
   effectId: 'damage',
+  effectValue: 6,
 };
 
 export const BARRIER: SpellDefinition = {
@@ -12,6 +13,7 @@ export const BARRIER: SpellDefinition = {
   name: 'Barrier',
   manaCost: 1,
   effectId: 'defense',
+  effectValue: 5,
 };
 
 export const BATTLE_CRY: SpellDefinition = {
@@ -19,6 +21,7 @@ export const BATTLE_CRY: SpellDefinition = {
   name: 'Battle Cry',
   manaCost: 1,
   effectId: 'attack-buff',
+  effectValue: 1,
 };
 
 export const DUSK_STRIKE: SpellDefinition = {
@@ -26,6 +29,7 @@ export const DUSK_STRIKE: SpellDefinition = {
   name: 'Dusk Strike',
   manaCost: 2,
   effectId: 'enemy-damage',
+  effectValue: 5,
 };
 
 export const DARK_WARD: SpellDefinition = {
@@ -33,6 +37,7 @@ export const DARK_WARD: SpellDefinition = {
   name: 'Dark Ward',
   manaCost: 1,
   effectId: 'enemy-defense',
+  effectValue: 4,
 };
 
 export const SPELLS: readonly SpellDefinition[] = [

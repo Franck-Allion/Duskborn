@@ -70,6 +70,10 @@ export interface CombatState {
   enemyDeck: SpellDeckState;
   selectedPlayerAbilities: Record<string, string>;
   selectedEnemyAbilities: Record<string, string>;
+  playerPlayedSpells?: string[];
+  enemyPlayedSpells?: string[];
+  playerHeroShield?: number;
+  enemyHeroShield?: number;
 }
 
 /**
@@ -165,13 +169,15 @@ export function beginTurn(state: CombatState): boolean {
     return false;
   }
 
-  // Restore active side's Mana to maximum
+  // Restore active side's Mana to maximum and clear played-spells list
   if (state.activeSide === 'player') {
     state.playerMana.current = state.playerMana.max;
     state.selectedPlayerAbilities = {};
+    state.playerPlayedSpells = [];
   } else {
     state.enemyMana.current = state.enemyMana.max;
     state.selectedEnemyAbilities = {};
+    state.enemyPlayedSpells = [];
   }
 
   drawSpell(state.activeSide === 'player' ? state.playerDeck : state.enemyDeck);
@@ -466,6 +472,15 @@ export function playSpell(
     return false;
   }
 
+  // 7. Record successfully played spell in the per-turn list
+  if (side === 'player') {
+    state.playerPlayedSpells ??= [];
+    state.playerPlayedSpells.push(spellId);
+  } else {
+    state.enemyPlayedSpells ??= [];
+    state.enemyPlayedSpells.push(spellId);
+  }
+
   return true;
 }
 
@@ -580,6 +595,67 @@ export function applyDamageToSquad(
 }
 
 /**
+ * Reusable helper that applies damage to a hero.
+ * - Symmetrically supports hero shields if present.
+ * - Direct spell damage and empty-lane squad damage utilize this same shield/HP rules helper.
+ * - Clamps final hero HP at minimum 0.
+ */
+export function applyDamageToHero(
+  state: CombatState,
+  side: CombatSide,
+  amount: number,
+): void {
+  if (amount <= 0) {
+    return;
+  }
+
+  const shieldField = side === 'player' ? 'playerHeroShield' : 'enemyHeroShield';
+  const hpField = side === 'player' ? 'playerHeroHp' : 'enemyHeroHp';
+
+  const currentShield = state[shieldField] ?? 0;
+
+  if (currentShield >= amount) {
+    state[shieldField] = currentShield - amount;
+  } else {
+    const remainingDamage = amount - currentShield;
+    state[shieldField] = 0;
+    state[hpField] = Math.max(0, state[hpField] - remainingDamage);
+  }
+}
+
+/**
+ * Resolves all successfully played spell effects for the active side in their play order.
+ * - Spell IDs must exist in the SPELL_REGISTRY.
+ * - Firebolt / Dusk Strike deal direct damage to the opposing hero.
+ * - Barrier / Dark Ward add a fixed amount of hero shield.
+ * - Battle Cry adds temporary attack buffs that are handled in the attack resolution loop.
+ */
+export function resolvePlayedSpells(state: CombatState, side: CombatSide): void {
+  const playedSpells = side === 'player' ? (state.playerPlayedSpells ?? []) : (state.enemyPlayedSpells ?? []);
+  const opponentSide = side === 'player' ? 'enemy' : 'player';
+
+  for (const spellId of playedSpells) {
+    const spell = SPELL_REGISTRY.get(spellId);
+    if (!spell) {
+      // Ignore/reject invalid queued ID safely without crashing
+      continue;
+    }
+
+    if (spell.effectId === 'damage' || spell.effectId === 'enemy-damage') {
+      const damage = spell.effectValue ?? 0;
+      applyDamageToHero(state, opponentSide, damage);
+    } else if (spell.effectId === 'defense' || spell.effectId === 'enemy-defense') {
+      const shieldAmount = spell.effectValue ?? 0;
+      if (side === 'player') {
+        state.playerHeroShield = (state.playerHeroShield ?? 0) + shieldAmount;
+      } else {
+        state.enemyHeroShield = (state.enemyHeroShield ?? 0) + shieldAmount;
+      }
+    }
+  }
+}
+
+/**
  * Resolves all attacks for the active side's surviving positioned squads.
  * Rules:
  * - Only legal when state.phase is 'RESOLUTION'.
@@ -603,6 +679,31 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
   // 2. Collect surviving and positioned active-side squads
   const attackers = side === 'player' ? state.playerSquads : state.enemySquads;
   const activeAttackers = attackers.filter((s) => s.count > 0 && s.position !== null);
+
+  // Optional preflight hardening: validate each selected ability is valid
+  const preflightSelections = side === 'player' ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
+  for (const attacker of activeAttackers) {
+    const abilityId = preflightSelections[attacker.unitTypeId];
+    if (abilityId !== undefined) {
+      const unit = UNIT_REGISTRY.get(attacker.unitTypeId);
+      if (!ABILITY_REGISTRY.has(abilityId) || !unit?.abilities.includes(abilityId)) {
+        return false;
+      }
+    }
+  }
+
+  // Resolve active side's played spells first
+  resolvePlayedSpells(state, side);
+
+  // Calculate total Battle Cry bonus
+  let battleCryBonus = 0;
+  const activePlayedSpells = side === 'player' ? (state.playerPlayedSpells ?? []) : (state.enemyPlayedSpells ?? []);
+  for (const spellId of activePlayedSpells) {
+    const spell = SPELL_REGISTRY.get(spellId);
+    if (spell && spell.effectId === 'attack-buff') {
+      battleCryBonus += spell.effectValue ?? 0;
+    }
+  }
 
   // 3. Deterministic order: column ascending (0 -> 5), FRONT before BACK
   const sortedAttackers = [...activeAttackers].sort((a, b) => {
@@ -661,17 +762,13 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
       }
     }
 
-    // Calculate total squad attack damage using per-unit scaling: count * (baseDamage + mods)
-    const effectiveDamagePerUnit = baseDamage + abilityAttackMod + positionAttackMod;
+    // Calculate total squad attack damage using per-unit scaling: count * (baseDamage + mods + battleCryBonus)
+    const effectiveDamagePerUnit = baseDamage + abilityAttackMod + positionAttackMod + battleCryBonus;
     const totalDamage = attacker.count * effectiveDamagePerUnit;
 
     // Apply damage to target
     if (target.type === 'hero') {
-      if (target.side === 'player') {
-        state.playerHeroHp = Math.max(0, state.playerHeroHp - totalDamage);
-      } else {
-        state.enemyHeroHp = Math.max(0, state.enemyHeroHp - totalDamage);
-      }
+      applyDamageToHero(state, target.side, totalDamage);
     } else {
       const targetSquad = target.squad;
       const targetDef = UNIT_REGISTRY.get(targetSquad.unitTypeId)!;

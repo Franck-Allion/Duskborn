@@ -5,8 +5,12 @@ import {
   type CombatState,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
+  applyDamageToHero,
+  playSpell,
+  confirmAttack,
+  endTurn,
 } from '../src/game/combat/CombatState';
-import { GUARDIAN } from '../src/game/content/unitTypes';
+import { GUARDIAN, DUSKBORN_BRUTE } from '../src/game/content/unitTypes';
 import type { Squad } from '../src/game/combat/Squad';
 
 describe('combat core attack resolution', () => {
@@ -237,30 +241,45 @@ describe('combat core attack resolution', () => {
       expect(state.enemyHeroHp).toBe(0);
     });
 
-    it('resolves attacks in deterministic order (column ascending, FRONT before BACK)', () => {
+    it('resolves attacks in deterministic order (FRONT before BACK is non-commutative)', () => {
       const state = createCleanCombat();
       state.playerSquads = [
-        {
-          unitTypeId: 'archer',
-          count: 1,
-          damagedUnitHp: null,
-          position: { column: 3, row: 3 }, // col 3 BACK (Player Archer)
-        },
         {
           unitTypeId: 'guardian',
           count: 1,
           damagedUnitHp: null,
-          position: { column: 1, row: 2 }, // col 1 FRONT (Player Guardian)
+          position: { column: 2, row: 2 }, // col 2 FRONT: baseDamage = 4
+        },
+        {
+          unitTypeId: 'archer',
+          count: 1,
+          damagedUnitHp: null,
+          position: { column: 2, row: 3 }, // col 2 BACK: baseDamage = 5
+        },
+      ];
+      // Enemy Brute at col 2 FRONT starts with exactly 4 HP
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 1,
+          damagedUnitHp: 4,
+          position: { column: 2, row: 1 }, // col 2 FRONT
         },
       ];
       state.enemyHeroHp = 10;
 
-      // If resolved in deterministic order:
-      // 1. Player Guardian at col 1 deals 1 * 4 = 4 damage to enemy hero first.
-      // 2. Player Archer at col 3 deals 1 * 5 = 5 damage to enemy hero second.
-      // Total hero HP should become 10 - 4 - 5 = 1.
+      // If FRONT attacks before BACK (correct deterministic order):
+      // 1. Guardian (FRONT) attacks first, deals 4 damage to Brute. Brute dies exactly (HP 0).
+      // 2. Archer (BACK) attacks second. Since Brute is dead, Archer targets enemy hero and deals 5 damage.
+      // Final Enemy Hero HP: 10 - 5 = 5.
+      //
+      // (If BACK attacked before FRONT, Archer would deal 5 to Brute, killing it. Guardian would then deal 4 to Hero, leaving Hero at 6 HP.)
       expect(resolveActiveSideAttack(state)).toBe(true);
-      expect(state.enemyHeroHp).toBe(1);
+      expect(state.enemyHeroHp).toBe(5);
+
+      const brute = state.enemySquads[0];
+      expect(brute.count).toBe(0);
+      expect(brute.position).toBeNull();
     });
 
     it('ignores dead attackers and unpositioned squads (count = 0 or position = null does not attack)', () => {
@@ -303,6 +322,160 @@ describe('combat core attack resolution', () => {
       // Guardian baseDamage is 4. Total damage = 3 * 4 = 12.
       // Enemy Hero HP should become 20 - 12 = 8.
       expect(state.enemyHeroHp).toBe(8);
+    });
+
+    it('resolves played spell effects in successful play order before squad attacks', () => {
+      const state = createCleanCombat();
+      state.playerSquads = [
+        {
+          unitTypeId: 'archer',
+          count: 1,
+          damagedUnitHp: null,
+          position: { column: 0, row: 3 }, // BACK
+        },
+      ];
+      state.enemyHeroHp = 20;
+
+      // Simulate playing Firebolt (deals 6 direct damage) and Battle Cry (adds +1 per-unit damage)
+      state.playerPlayedSpells = ['firebolt', 'battle-cry'];
+
+      expect(resolveActiveSideAttack(state)).toBe(true);
+
+      // Firebolt deals 6 direct damage -> Enemy Hero HP is 14.
+      // Battle Cry adds +1 per-unit damage -> Archer deals 1 * (5 + 1) = 6 damage.
+      // Final Enemy Hero HP: 20 - 6 (Firebolt) - 6 (Archer) = 8.
+      expect(state.enemyHeroHp).toBe(8);
+    });
+
+    it('supports Barrier / Dark Ward hero shield defensive semantics', () => {
+      const state = createCleanCombat();
+
+      // Clear any initial shields
+      state.playerHeroShield = 0;
+      state.playerHeroHp = 100;
+
+      // Simulate playing Barrier (adds 5 hero shield)
+      state.playerPlayedSpells = ['barrier'];
+      expect(resolveActiveSideAttack(state)).toBe(true);
+      expect(state.playerHeroShield).toBe(5);
+
+      // 1. Damage smaller than shield
+      applyDamageToHero(state, 'player', 3);
+      expect(state.playerHeroShield).toBe(2);
+      expect(state.playerHeroHp).toBe(100);
+
+      // 2. Damage larger than shield (removes shield and subtracts excess from HP)
+      applyDamageToHero(state, 'player', 7);
+      expect(state.playerHeroShield).toBe(0);
+      expect(state.playerHeroHp).toBe(95);
+
+      // 3. Shield does not affect squad damage
+      state.enemyHeroShield = 5;
+      state.enemySquads = [
+        {
+          unitTypeId: 'duskborn-brute',
+          count: 2,
+          damagedUnitHp: null,
+          position: { column: 1, row: 1 },
+        },
+      ];
+      // Deal squad damage directly to Brute (base HP 8 per unit, count 2 -> 16 HP)
+      applyDamageToSquad(state.enemySquads[0], DUSKBORN_BRUTE, 10);
+
+      // Brute should take full damage (1 unit dies, next takes 2 damage -> count 1, damagedHp 6)
+      expect(state.enemySquads[0].count).toBe(1);
+      expect(state.enemySquads[0].damagedUnitHp).toBe(6);
+      // Enemy Hero shield is unaffected!
+      expect(state.enemyHeroShield).toBe(5);
+    });
+
+    it('handles Mana spending semantics exactly once and does not charge again during resolution', () => {
+      const state = createCleanCombat();
+      state.phase = 'ACTION';
+      state.playerMana = { current: 3, max: 3 };
+
+      // Set up hand containing 'firebolt'
+      state.playerDeck.hand = ['firebolt'];
+
+      // Play spell during ACTION phase
+      const castSuccess = playSpell(state, 'player', 'firebolt');
+      expect(castSuccess).toBe(true);
+      expect(state.playerMana.current).toBe(1); // Spent 2 Mana for Firebolt
+
+      // Move phase to RESOLUTION via confirmAttack
+      state.playerSquads = [
+        {
+          unitTypeId: 'guardian',
+          count: 1,
+          damagedUnitHp: null,
+          position: { column: 1, row: 2 },
+        },
+      ];
+      state.selectedPlayerAbilities['guardian'] = 'guardian-strike';
+
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+
+      // Resolve attacks
+      expect(resolveActiveSideAttack(state)).toBe(true);
+      // Verify Mana is still 1 (no double payment or second charge during resolution)
+      expect(state.playerMana.current).toBe(1);
+    });
+
+    it('handles insufficient Mana and unused Mana correctly', () => {
+      const state = createCleanCombat();
+      state.phase = 'ACTION';
+      state.playerMana = { current: 1, max: 3 };
+      state.playerDeck.hand = ['firebolt']; // costs 2 Mana
+
+      const castSuccess = playSpell(state, 'player', 'firebolt');
+      expect(castSuccess).toBe(false); // Insufficient Mana
+      expect(state.playerMana.current).toBe(1); // Unchanged
+      expect(state.playerDeck.hand).toContain('firebolt'); // Still in hand
+
+      // Confirm with unused Mana remaining (Mana = 1)
+      state.playerSquads = [
+        {
+          unitTypeId: 'guardian',
+          count: 1,
+          damagedUnitHp: null,
+          position: { column: 1, row: 2 },
+        },
+      ];
+      state.selectedPlayerAbilities['guardian'] = 'guardian-strike';
+
+      expect(confirmAttack(state)).toBe(true);
+      expect(resolveActiveSideAttack(state)).toBe(true);
+      expect(state.playerMana.current).toBe(1); // Resolved with unused Mana remaining
+    });
+
+    it('clears played spells at TURN_START and refreshes Mana during turn handoff', () => {
+      const state = createCleanCombat();
+      // Ends in RESOLUTION phase
+      state.playerPlayedSpells = ['firebolt'];
+
+      expect(resolveActiveSideAttack(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+
+      // Hand off turn to enemy
+      expect(endTurn(state)).toBe(true);
+
+      // Now it is Enemy turn, in DEPLOYMENT phase
+      expect(state.activeSide).toBe('enemy');
+      expect(state.phase).toBe('DEPLOYMENT');
+      // Enemy played spells should be initialized / cleared
+      expect(state.enemyPlayedSpells).toEqual([]);
+
+      // End enemy turn and return to player
+      state.phase = 'RESOLUTION';
+      state.enemyPlayedSpells = ['dusk-strike'];
+      expect(resolveActiveSideAttack(state)).toBe(true);
+      expect(endTurn(state)).toBe(true);
+
+      // Active side is Player again
+      expect(state.activeSide).toBe('player');
+      expect(state.playerPlayedSpells).toEqual([]); // Cleared at start of turn!
+      expect(state.playerMana.current).toBe(3); // Refreshed to max!
     });
   });
 });
