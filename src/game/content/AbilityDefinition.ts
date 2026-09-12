@@ -15,4 +15,5 @@ export interface AbilityDefinition {
   readonly effectId: string;
   readonly positionRule?: AbilityPositionRule;
   readonly positionModifier?: PositionModifier;
+  readonly attackModifier?: number;
 }

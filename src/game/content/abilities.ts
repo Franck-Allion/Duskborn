@@ -32,6 +32,7 @@ export const ARCHER_POWER_SHOT: AbilityDefinition = {
   effectId: 'power-shot',
   positionRule: { horizontal: 'EDGE' },
   positionModifier: { type: 'damage', value: 2 },
+  attackModifier: 2,
 };
 
 export const DUSKBORN_BRUTE_STRIKE: AbilityDefinition = {

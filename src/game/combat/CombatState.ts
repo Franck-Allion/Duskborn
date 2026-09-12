@@ -2,10 +2,14 @@ import {
   isPlayerDeploymentPosition,
   isEnemyDeploymentPosition,
   isCombatPositionOccupied,
+  selectLaneTarget,
+  evaluateAbilityPositionEffect,
+  getDepthPosition,
   type CombatSide,
 } from './CombatGrid';
 import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
+import type { UnitType } from '../content/UnitType';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
 import { ABILITY_REGISTRY } from '../content/abilities';
@@ -527,5 +531,155 @@ export function tryUseAbility(
 
   // 7. Record the selected ability
   selections[unitTypeId] = abilityId;
+  return true;
+}
+
+/**
+ * Reusable helper that applies damage to a squad using the HP stack model.
+ * - Respects squad count and partial HP (damagedUnitHp).
+ * - If count reaches 0, squad is disabled (count = 0, damagedUnitHp = null, position = null).
+ */
+export function applyDamageToSquad(
+  squad: Squad,
+  unitDefinition: UnitType,
+  damage: number,
+): void {
+  if (damage <= 0 || squad.count <= 0) {
+    return;
+  }
+
+  const hpPerUnit = unitDefinition.hpPerUnit;
+
+  // Let's determine how much HP the current damaged unit has.
+  // If damagedUnitHp is null, then the current unit is at full HP (hpPerUnit).
+  let currentUnitHp = squad.damagedUnitHp !== null ? squad.damagedUnitHp : hpPerUnit;
+
+  let remainingDamage = damage;
+
+  while (remainingDamage > 0 && squad.count > 0) {
+    if (remainingDamage >= currentUnitHp) {
+      // The current unit dies!
+      remainingDamage -= currentUnitHp;
+      squad.count -= 1;
+      currentUnitHp = hpPerUnit; // next unit starts at full HP
+      squad.damagedUnitHp = null;
+    } else {
+      // The current unit survives but takes some damage!
+      currentUnitHp -= remainingDamage;
+      squad.damagedUnitHp = currentUnitHp;
+      remainingDamage = 0;
+    }
+  }
+
+  // If squad count reaches 0, ensure fields are cleared.
+  if (squad.count <= 0) {
+    squad.count = 0;
+    squad.damagedUnitHp = null;
+    squad.position = null; // Also clear position so it no longer blocks lanes!
+  }
+}
+
+/**
+ * Resolves all attacks for the active side's surviving positioned squads.
+ * Rules:
+ * - Only legal when state.phase is 'RESOLUTION'.
+ * - Attackers must have count > 0 and position !== null.
+ * - Deterministic attack order: column ascending (0 -> 5), and FRONT before BACK inside same column.
+ * - Targets are selected dynamically per attacker from the current mutated state (using selectLaneTarget).
+ * - Dead opposing squads stop blocking immediately, allowing subsequent attackers in the same column to target hero.
+ * - Direct hero damage is applied and clamped at minimum 0.
+ * - Concludes by transitioning phase to 'TURN_END' using endResolution().
+ * Returns true if successfully resolved, or false if phase was invalid.
+ */
+export function resolveActiveSideAttack(state: CombatState): boolean {
+  // 1. Phase validation
+  if (state.phase !== 'RESOLUTION') {
+    return false;
+  }
+
+  const side = state.activeSide;
+  const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
+
+  // 2. Collect surviving and positioned active-side squads
+  const attackers = side === 'player' ? state.playerSquads : state.enemySquads;
+  const activeAttackers = attackers.filter((s) => s.count > 0 && s.position !== null);
+
+  // 3. Deterministic order: column ascending (0 -> 5), FRONT before BACK
+  const sortedAttackers = [...activeAttackers].sort((a, b) => {
+    const posA = a.position!;
+    const posB = b.position!;
+    if (posA.column !== posB.column) {
+      return posA.column - posB.column;
+    }
+    // Sibling order: FRONT before BACK
+    const depthA = getDepthPosition(posA, side);
+    const depthB = getDepthPosition(posB, side);
+    if (depthA === 'FRONT' && depthB === 'BACK') {
+      return -1;
+    }
+    if (depthA === 'BACK' && depthB === 'FRONT') {
+      return 1;
+    }
+    return 0;
+  });
+
+  // 4. Resolve attacks sequentially
+  for (const attacker of sortedAttackers) {
+    // Verify attacker has not somehow died during resolution (no counter-attacks currently, but safe practice)
+    if (attacker.count <= 0) {
+      continue;
+    }
+
+    // Determine current target using existing lane-targeting logic from current mutated state
+    const target = selectLaneTarget(attacker, side, opponents);
+    if (!target) {
+      continue;
+    }
+
+    // Determine attacker unit definition and base damage
+    const attackerDef = UNIT_REGISTRY.get(attacker.unitTypeId)!;
+    const baseDamage = attackerDef.baseDamage;
+
+    // Resolve selected ability and its damage modifiers
+    const selectedAbilities = side === 'player' ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
+    const abilityId = selectedAbilities[attacker.unitTypeId];
+
+    let abilityAttackMod = 0;
+    let positionAttackMod = 0;
+
+    if (abilityId !== undefined) {
+      const abilityDef = ABILITY_REGISTRY.get(abilityId);
+      if (abilityDef) {
+        if (abilityDef.attackModifier !== undefined) {
+          abilityAttackMod = abilityDef.attackModifier;
+        }
+        // Evaluate active positional modifiers
+        const posEval = evaluateAbilityPositionEffect(abilityId, side, attacker.position);
+        if (posEval.active && posEval.modifierType === 'damage' && posEval.modifierValue !== undefined) {
+          positionAttackMod = posEval.modifierValue;
+        }
+      }
+    }
+
+    // Calculate total squad attack damage using per-unit scaling: count * (baseDamage + mods)
+    const effectiveDamagePerUnit = baseDamage + abilityAttackMod + positionAttackMod;
+    const totalDamage = attacker.count * effectiveDamagePerUnit;
+
+    // Apply damage to target
+    if (target.type === 'hero') {
+      if (target.side === 'player') {
+        state.playerHeroHp = Math.max(0, state.playerHeroHp - totalDamage);
+      } else {
+        state.enemyHeroHp = Math.max(0, state.enemyHeroHp - totalDamage);
+      }
+    } else {
+      const targetSquad = target.squad;
+      const targetDef = UNIT_REGISTRY.get(targetSquad.unitTypeId)!;
+      applyDamageToSquad(targetSquad, targetDef, totalDamage);
+    }
+  }
+
+  // 5. Conclude RESOLUTION and transition to TURN_END
+  endResolution(state);
   return true;
 }

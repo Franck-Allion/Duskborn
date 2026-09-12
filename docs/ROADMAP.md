@@ -849,17 +849,17 @@ opposing hero if lane empty
 
 Keep attack resolution deterministic.
 
-* [ ] Resolve selected squad abilities
+* [x] Resolve selected squad abilities
 * [ ] Resolve spell effects required before attacks
-* [ ] Evaluate attacks for every surviving active-side squad
-* [ ] Use existing lane-targeting rules
-* [ ] Apply squad damage
-* [ ] Remove dead units from squad counts
-* [ ] Preserve partial HP on the currently damaged unit
-* [ ] Remove/disable squad when count reaches 0
-* [ ] Apply direct hero damage when opposing lane is empty
-* [ ] Ensure dead squads no longer block lanes
-* [ ] Preserve deterministic resolution order
+* [x] Evaluate attacks for every surviving active-side squad
+* [x] Use existing lane-targeting rules
+* [x] Apply squad damage
+* [x] Remove dead units from squad counts
+* [x] Preserve partial HP on the currently damaged unit
+* [x] Remove/disable squad when count reaches 0
+* [x] Apply direct hero damage when opposing lane is empty
+* [x] Ensure dead squads no longer block lanes
+* [x] Preserve deterministic resolution order
 * [ ] Complete Mana spending semantics
 * [ ] Add attack-resolution tests
 
