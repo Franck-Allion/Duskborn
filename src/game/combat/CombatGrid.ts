@@ -1,5 +1,6 @@
 import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
+import { ABILITY_REGISTRY } from '../content/abilities';
 
 export const GRID_COLUMNS = 6;
 export const GRID_ROWS = 4;
@@ -349,4 +350,55 @@ export function selectLaneTarget(
 
   const selectedSquad = frontCandidate || candidates[0];
   return { type: 'squad', squad: selectedSquad };
+}
+
+export interface EvaluationResult {
+  readonly active: boolean;
+  readonly modifierType?: 'damage' | 'defense';
+  readonly modifierValue?: number;
+}
+
+/**
+ * Evaluates whether an ability's positional condition is active for the squad at the given position and side.
+ * Resolves properties from the ABILITY_REGISTRY.
+ * Returns information indicating whether the positional modifier is active and its modifier details.
+ */
+export function evaluateAbilityPositionEffect(
+  abilityId: string,
+  side: CombatSide,
+  position: CombatPosition | null,
+): EvaluationResult {
+  // If the position is null (unpositioned squad), then the effect is inactive.
+  if (position === null) {
+    return { active: false };
+  }
+
+  // Look up the ability definition from registry
+  const ability = ABILITY_REGISTRY.get(abilityId);
+  if (!ability || !ability.positionRule || !ability.positionModifier) {
+    return { active: false };
+  }
+
+  // Evaluate depth position rule
+  if (ability.positionRule.depth !== undefined) {
+    const depthCat = getDepthPosition(position, side);
+    if (depthCat !== ability.positionRule.depth) {
+      return { active: false };
+    }
+  }
+
+  // Evaluate horizontal position rule
+  if (ability.positionRule.horizontal !== undefined) {
+    const horizCat = getHorizontalPosition(position);
+    if (horizCat !== ability.positionRule.horizontal) {
+      return { active: false };
+    }
+  }
+
+  // All matches -> active!
+  return {
+    active: true,
+    modifierType: ability.positionModifier.type,
+    modifierValue: ability.positionModifier.value,
+  };
 }

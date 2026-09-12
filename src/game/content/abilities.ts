@@ -12,6 +12,8 @@ export const GUARDIAN_SHIELD_WALL: AbilityDefinition = {
   name: 'Shield Wall',
   manaCost: 2,
   effectId: 'defense',
+  positionRule: { depth: 'FRONT' },
+  positionModifier: { type: 'defense', value: 2 },
 };
 
 export const ARCHER_SHOT: AbilityDefinition = {
@@ -19,6 +21,8 @@ export const ARCHER_SHOT: AbilityDefinition = {
   name: 'Shot',
   manaCost: 0,
   effectId: 'shot',
+  positionRule: { depth: 'BACK' },
+  positionModifier: { type: 'damage', value: 1 },
 };
 
 export const ARCHER_POWER_SHOT: AbilityDefinition = {
@@ -26,6 +30,8 @@ export const ARCHER_POWER_SHOT: AbilityDefinition = {
   name: 'Power Shot',
   manaCost: 1,
   effectId: 'power-shot',
+  positionRule: { horizontal: 'EDGE' },
+  positionModifier: { type: 'damage', value: 2 },
 };
 
 export const DUSKBORN_BRUTE_STRIKE: AbilityDefinition = {

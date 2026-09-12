@@ -767,12 +767,12 @@ Success condition:
 
 Use the already completed position-category system.
 
-* [ ] Add at least one FRONT-based effect
-* [ ] Add at least one BACK-based effect
-* [ ] Add at least one EDGE or CENTER-based effect
-* [ ] Re-evaluate position effects after legal repositioning
-* [ ] Keep these rules data-driven where practical
-* [ ] Add position-effect tests
+* [x] Add at least one FRONT-based effect
+* [x] Add at least one BACK-based effect
+* [x] Add at least one EDGE or CENTER-based effect
+* [x] Re-evaluate position effects after legal repositioning
+* [x] Keep these rules data-driven where practical
+* [x] Add position-effect tests
 
 Example:
 
