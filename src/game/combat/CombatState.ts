@@ -64,6 +64,8 @@ export interface CombatState {
   enemyMana: CombatMana;
   playerDeck: SpellDeckState;
   enemyDeck: SpellDeckState;
+  selectedPlayerAbilities: Record<string, string>;
+  selectedEnemyAbilities: Record<string, string>;
 }
 
 /**
@@ -162,8 +164,10 @@ export function beginTurn(state: CombatState): boolean {
   // Restore active side's Mana to maximum
   if (state.activeSide === 'player') {
     state.playerMana.current = state.playerMana.max;
+    state.selectedPlayerAbilities = {};
   } else {
     state.enemyMana.current = state.enemyMana.max;
+    state.selectedEnemyAbilities = {};
   }
 
   drawSpell(state.activeSide === 'player' ? state.playerDeck : state.enemyDeck);
@@ -481,6 +485,12 @@ export function tryUseAbility(
     return false;
   }
 
+  // 4.5. Validate no previous selection has occurred for this squad during this turn
+  const selections = side === 'player' ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
+  if (selections[unitTypeId] !== undefined) {
+    return false;
+  }
+
   // 5. Validate sufficient Mana
   const mana = side === 'player' ? state.playerMana : state.enemyMana;
   if (mana.current < abilityDef.manaCost) {
@@ -493,5 +503,7 @@ export function tryUseAbility(
     return false;
   }
 
+  // 7. Record the selected ability
+  selections[unitTypeId] = abilityId;
   return true;
 }

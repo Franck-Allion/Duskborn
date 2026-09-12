@@ -35,6 +35,8 @@ function createCombat(): CombatState {
     enemyMana: { current: 0, max: 3 },
     playerDeck: createInitialPlayerSpellDeck(),
     enemyDeck: createInitialEnemySpellDeck(),
+    selectedPlayerAbilities: {},
+    selectedEnemyAbilities: {},
   };
 }
 

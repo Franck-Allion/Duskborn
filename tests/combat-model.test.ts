@@ -193,6 +193,8 @@ describe('Combat Model Data structures', () => {
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
+      selectedPlayerAbilities: {},
+      selectedEnemyAbilities: {},
     };
 
     expect(combatState.playerSquads).toHaveLength(1);
@@ -259,6 +261,8 @@ describe('Combat Model Data structures', () => {
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
+      selectedPlayerAbilities: {},
+      selectedEnemyAbilities: {},
     };
     expect(isValidCombatState(state)).toBe(true);
 
@@ -358,6 +362,8 @@ describe('Combat Model Data structures', () => {
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
+      selectedPlayerAbilities: {},
+      selectedEnemyAbilities: {},
     };
 
     // 1. All positioned legally => valid
@@ -471,6 +477,8 @@ describe('Combat Model Data structures', () => {
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
+      selectedPlayerAbilities: {},
+      selectedEnemyAbilities: {},
     };
 
     // Before placing player squads, deployment must be invalid
@@ -514,7 +522,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
 
       expect(state.activeSide).toBe('player');
       expect(state.turn).toBe(1);
@@ -535,7 +545,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
 
       // 2. TURN_START -> DEPLOYMENT (Player)
       expect(beginTurn(state)).toBe(true);
@@ -605,7 +617,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
 
       // 1. From TURN_START, only beginTurn() is valid.
       expect(confirmDeployment(state)).toBe(false);
@@ -673,7 +687,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 2, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
 
       expect(state.playerMana.max).toBe(DEFAULT_COMBAT_MAX_MANA);
       expect(state.enemyMana.max).toBe(DEFAULT_COMBAT_MAX_MANA);
@@ -784,7 +800,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
 
       combatState.playerDeck.drawPile.push('firebolt');
       expect(combatState.enemyDeck.drawPile).not.toContain('firebolt'); // enemy deck remains isolated
@@ -832,7 +850,9 @@ describe('Combat Model Data structures', () => {
         enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
         playerDeck: createInitialPlayerSpellDeck(),
         enemyDeck: createInitialEnemySpellDeck(),
-      };
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+        };
     }
 
     it('allows player to reposition surviving player squads within the player deployment zone when no lane restrictions apply', () => {
@@ -1183,6 +1203,8 @@ describe('Combat Model Data structures', () => {
           hand: ['dusk-strike', 'dark-ward'], // Started with cards in hand
           discardPile: [],
         },
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
       };
     }
 
@@ -1299,7 +1321,8 @@ describe('Combat Model Data structures', () => {
       expect(tryUseAbility(state, 'player', 'archer', 'archer-power-shot')).toBe(true);
       expect(state.playerMana.current).toBe(0); // 1 - 1 = 0
 
-      // 3. Guardian Strike (cost 0) -> succeeds even with 0 Mana
+      // 3. Guardian Strike (cost 0) -> succeeds even with 0 Mana after clearing selection
+      state.selectedPlayerAbilities = {};
       expect(tryUseAbility(state, 'player', 'guardian', 'guardian-strike')).toBe(true);
       expect(state.playerMana.current).toBe(0); // unchanged
     });
@@ -1330,6 +1353,70 @@ describe('Combat Model Data structures', () => {
 
       expect(tryUseAbility(state, 'enemy', 'duskborn-brute', 'duskborn-brute-strike')).toBe(false);
       expect(state.enemyMana.current).toBe(1); // unchanged
+    });
+
+    it('restricts each squad to at most one ability use per turn and clears on new turn', () => {
+      const state = createCleanActionState(); // Starts in ACTION, player active, 3 Mana
+
+      // 1. First use is allowed and recorded
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-strike')).toBe(true);
+      expect(state.selectedPlayerAbilities['guardian']).toBe('guardian-strike');
+
+      // 2. Same squad trying another ability fails
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-shield-wall')).toBe(false);
+      expect(state.selectedPlayerAbilities['guardian']).toBe('guardian-strike'); // remains Strike
+
+      // 3. Same squad trying the exact same ability twice fails
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-strike')).toBe(false);
+
+      // 4. Independent squads: Archer can still select an ability
+      expect(tryUseAbility(state, 'player', 'archer', 'archer-power-shot')).toBe(true);
+      expect(state.selectedPlayerAbilities['archer']).toBe('archer-power-shot');
+
+      // 5. Selection persists into RESOLUTION phase
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+      expect(state.selectedPlayerAbilities['guardian']).toBe('guardian-strike');
+      expect(state.selectedPlayerAbilities['archer']).toBe('archer-power-shot');
+
+      // 6. Complete full side cycle to trigger player's next TURN_START/beginTurn()
+      // Transition RESOLUTION -> TURN_END
+      expect(endResolution(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+
+      // Transition TURN_END -> DEPLOYMENT (Enemy active)
+      expect(endTurn(state)).toBe(true);
+      expect(state.activeSide).toBe('enemy');
+      expect(state.phase).toBe('DEPLOYMENT');
+
+      // Transitions for enemy side
+      expect(confirmDeployment(state)).toBe(true);
+      expect(confirmAttack(state)).toBe(true);
+      expect(endResolution(state)).toBe(true);
+      expect(endTurn(state)).toBe(true); // Hand-off back to player
+
+      // Active side is player, phase is DEPLOYMENT.
+      // Selections for the player side have been cleared on TURN_START/beginTurn()
+      expect(state.activeSide).toBe('player');
+      expect(state.phase).toBe('DEPLOYMENT');
+      expect(state.selectedPlayerAbilities['guardian']).toBeUndefined();
+      expect(state.selectedPlayerAbilities['archer']).toBeUndefined();
+    });
+
+    it('enforces shared Mana budget between spells and abilities', () => {
+      const state = createCleanActionState(); // 3 Mana
+
+      // Play Shield Wall (cost 2)
+      expect(tryUseAbility(state, 'player', 'guardian', 'guardian-shield-wall')).toBe(true);
+      expect(state.playerMana.current).toBe(1);
+
+      // Play Barrier (cost 1)
+      expect(playSpell(state, 'player', 'barrier')).toBe(true);
+      expect(state.playerMana.current).toBe(0);
+
+      // Attempt another paid action (e.g. Battle Cry cost 1) -> fails
+      expect(playSpell(state, 'player', 'battle-cry')).toBe(false);
+      expect(state.playerMana.current).toBe(0);
     });
   });
 

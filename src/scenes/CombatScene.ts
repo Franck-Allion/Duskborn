@@ -89,6 +89,8 @@ export class CombatScene extends Phaser.Scene {
       enemyMana: { current: 0, max: DEFAULT_COMBAT_MAX_MANA },
       playerDeck: createInitialPlayerSpellDeck(),
       enemyDeck: createInitialEnemySpellDeck(),
+      selectedPlayerAbilities: {},
+      selectedEnemyAbilities: {},
     };
     beginTurn(this.combatState);
 

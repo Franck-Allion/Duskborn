@@ -749,9 +749,9 @@ but keep first effects simple.
 * [x] Support Mana spell costs
 * [x] Prevent ability/spell use when Mana is insufficient
 * [x] Spend Mana only on successful legal actions
-* [ ] Prevent more than one selected attack ability per squad per turn
+* [x] Prevent more than one selected attack ability per squad per turn
 * [x] Allow multiple spells in a turn while Mana permits
-* [ ] Add ability/spell tests
+* [x] Add ability/spell tests
 
 Gold is not a combat action cost in this MVP.
 
