@@ -48,6 +48,7 @@ import {
   GUARDIAN,
 } from '../src/game/content/unitTypes';
 import { SPELLS, SPELL_REGISTRY } from '../src/game/content/spells';
+import { ABILITIES, ABILITY_REGISTRY } from '../src/game/content/abilities';
 
 describe('Combat Model Data structures', () => {
   it('defines Guardian with its initial content values', () => {
@@ -56,7 +57,7 @@ describe('Combat Model Data structures', () => {
       name: 'Guardian',
       hpPerUnit: 10,
       baseDamage: 4,
-      abilities: ['strike'],
+      abilities: ['guardian-strike', 'guardian-shield-wall'],
     });
   });
 
@@ -66,7 +67,7 @@ describe('Combat Model Data structures', () => {
       name: 'Archer',
       hpPerUnit: 6,
       baseDamage: 5,
-      abilities: ['shot'],
+      abilities: ['archer-shot', 'archer-power-shot'],
     });
   });
 
@@ -76,7 +77,7 @@ describe('Combat Model Data structures', () => {
       name: 'Duskborn Brute',
       hpPerUnit: 8,
       baseDamage: 6,
-      abilities: ['strike'],
+      abilities: ['duskborn-brute-strike'],
     });
   });
 
@@ -86,8 +87,60 @@ describe('Combat Model Data structures', () => {
       name: 'Duskborn Archer',
       hpPerUnit: 5,
       baseDamage: 5,
-      abilities: ['shot'],
+      abilities: ['duskborn-archer-shot'],
     });
+  });
+
+  it('defines deterministic combat abilities and registries according to section 0.6.11', () => {
+    // 1. Ability IDs are unique
+    const abilityIds = ABILITIES.map(a => a.id);
+    const uniqueAbilityIds = new Set(abilityIds);
+    expect(uniqueAbilityIds.size).toBe(abilityIds.length);
+
+    // 2. All manaCost values >= 0 and required fields exist
+    for (const ability of ABILITIES) {
+      expect(ability.id).toBeDefined();
+      expect(ability.name).toBeDefined();
+      expect(ability.manaCost).toBeGreaterThanOrEqual(0);
+      expect(ability.effectId).toBeDefined();
+    }
+
+    // 3. Every unit-referenced ability exists in the registry
+    const units = [GUARDIAN, ARCHER, DUSKBORN_BRUTE, DUSKBORN_ARCHER];
+    for (const unit of units) {
+      for (const id of unit.abilities) {
+        const ability = ABILITY_REGISTRY.get(id);
+        expect(ability).toBeDefined();
+        expect(ability!.id).toBe(id);
+      }
+    }
+
+    // 4. Guardian resolves to >= 2 abilities
+    expect(GUARDIAN.abilities.length).toBeGreaterThanOrEqual(2);
+
+    // 5. Archer resolves to >= 2 abilities
+    expect(ARCHER.abilities.length).toBeGreaterThanOrEqual(2);
+
+    // 6. Each Duskborn type resolves to >= 1 ability
+    expect(DUSKBORN_BRUTE.abilities.length).toBeGreaterThanOrEqual(1);
+    expect(DUSKBORN_ARCHER.abilities.length).toBeGreaterThanOrEqual(1);
+
+    // 7. Expected canonical costs
+    const strike = ABILITY_REGISTRY.get('guardian-strike')!;
+    expect(strike.name).toBe('Strike');
+    expect(strike.manaCost).toBe(0);
+
+    const shieldWall = ABILITY_REGISTRY.get('guardian-shield-wall')!;
+    expect(shieldWall.name).toBe('Shield Wall');
+    expect(shieldWall.manaCost).toBe(2);
+
+    const shot = ABILITY_REGISTRY.get('archer-shot')!;
+    expect(shot.name).toBe('Shot');
+    expect(shot.manaCost).toBe(0);
+
+    const powerShot = ABILITY_REGISTRY.get('archer-power-shot')!;
+    expect(powerShot.name).toBe('Power Shot');
+    expect(powerShot.manaCost).toBe(1);
   });
 
   it('correctly models a Squad representation with count, health, and positions', () => {

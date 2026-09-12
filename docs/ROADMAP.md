@@ -739,11 +739,11 @@ Spells come from the active side's hand and may affect:
 
 but keep first effects simple.
 
-* [ ] Create/extend ability content definition structure
-* [ ] Give Guardian at least 2 meaningful abilities
-* [ ] Give Archer at least 2 meaningful abilities
-* [ ] Give each Duskborn type at least 1 usable ability
-* [ ] Support Mana ability costs
+* [x] Create/extend ability content definition structure
+* [x] Give Guardian at least 2 meaningful abilities
+* [x] Give Archer at least 2 meaningful abilities
+* [x] Give each Duskborn type at least 1 usable ability
+* [x] Support Mana ability costs
 * [ ] Add at least 3 simple player spells
 * [ ] Add a minimal set of Duskborn spells or deterministic equivalents
 * [ ] Support Mana spell costs
