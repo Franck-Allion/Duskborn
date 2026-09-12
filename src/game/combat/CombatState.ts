@@ -120,3 +120,78 @@ export function beginTurn(state: CombatState): boolean {
   state.phase = 'DEPLOYMENT';
   return true;
 }
+
+/**
+ * Confirms deployment for the active side and transitions to ACTION phase.
+ * Transition rules:
+ * - Only valid when phase is 'DEPLOYMENT'.
+ * - Transitions state.phase to 'ACTION'.
+ * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ */
+export function confirmDeployment(state: CombatState): boolean {
+  if (state.phase !== 'DEPLOYMENT') {
+    return false;
+  }
+
+  state.phase = 'ACTION';
+  return true;
+}
+
+/**
+ * Confirms attack for the active side and transitions to RESOLUTION phase.
+ * Transition rules:
+ * - Only valid when phase is 'ACTION'.
+ * - Transitions state.phase to 'RESOLUTION'.
+ * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ */
+export function confirmAttack(state: CombatState): boolean {
+  if (state.phase !== 'ACTION') {
+    return false;
+  }
+
+  state.phase = 'RESOLUTION';
+  return true;
+}
+
+/**
+ * Concludes attack resolution for the active side and transitions to TURN_END phase.
+ * Transition rules:
+ * - Only valid when phase is 'RESOLUTION'.
+ * - Transitions state.phase to 'TURN_END'.
+ * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ */
+export function endResolution(state: CombatState): boolean {
+  if (state.phase !== 'RESOLUTION') {
+    return false;
+  }
+
+  state.phase = 'TURN_END';
+  return true;
+}
+
+/**
+ * Performs the side handoff during TURN_END.
+ * Transition rules:
+ * - Only valid when phase is 'TURN_END'.
+ * - Switches the activeSide (player -> enemy or enemy -> player).
+ * - Increments the turn count.
+ * - Triggers the TURN_START state, and immediately runs beginTurn() to land in DEPLOYMENT.
+ * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ */
+export function endTurn(state: CombatState): boolean {
+  if (state.phase !== 'TURN_END') {
+    return false;
+  }
+
+  // Handoff activeSide
+  state.activeSide = state.activeSide === 'player' ? 'enemy' : 'player';
+
+  // Increment turn
+  state.turn += 1;
+
+  // Transition to TURN_START
+  state.phase = 'TURN_START';
+
+  // Immediately begin the next turn to arrive in DEPLOYMENT
+  return beginTurn(state);
+}

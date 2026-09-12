@@ -29,6 +29,10 @@ import {
   isValidCombatState,
   isDeploymentValid,
   beginTurn,
+  confirmDeployment,
+  confirmAttack,
+  endResolution,
+  endTurn,
 } from '../src/game/combat/CombatState';
 import type { Squad } from '../src/game/combat/Squad';
 import {
@@ -444,7 +448,8 @@ describe('Combat Model Data structures', () => {
       expect(state.phase).toBe('TURN_START');
     });
 
-    it('transitions successfully from TURN_START to DEPLOYMENT on beginTurn', () => {
+    it('transitions successfully through the full player and enemy alternating turn phases', () => {
+      // 1. Initial State
       const state: CombatState = {
         playerSquads: [],
         enemySquads: [],
@@ -456,13 +461,62 @@ describe('Combat Model Data structures', () => {
         phase: 'TURN_START',
       };
 
-      const success = beginTurn(state);
-      expect(success).toBe(true);
+      // 2. TURN_START -> DEPLOYMENT (Player)
+      expect(beginTurn(state)).toBe(true);
       expect(state.phase).toBe('DEPLOYMENT');
-      expect(state.turn).toBe(1); // turn does not increment yet
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(1);
+
+      // 3. DEPLOYMENT -> ACTION (Player)
+      expect(confirmDeployment(state)).toBe(true);
+      expect(state.phase).toBe('ACTION');
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(1);
+
+      // 4. ACTION -> RESOLUTION (Player)
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(1);
+
+      // 5. RESOLUTION -> TURN_END (Player)
+      expect(endResolution(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(1);
+
+      // 6. TURN_END -> Hand-off (Player -> Enemy, turn becomes 2, automatically begins next turn and lands in DEPLOYMENT)
+      expect(endTurn(state)).toBe(true);
+      expect(state.phase).toBe('DEPLOYMENT');
+      expect(state.activeSide).toBe('enemy');
+      expect(state.turn).toBe(2);
+
+      // 7. DEPLOYMENT -> ACTION (Enemy)
+      expect(confirmDeployment(state)).toBe(true);
+      expect(state.phase).toBe('ACTION');
+      expect(state.activeSide).toBe('enemy');
+      expect(state.turn).toBe(2);
+
+      // 8. ACTION -> RESOLUTION (Enemy)
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+      expect(state.activeSide).toBe('enemy');
+      expect(state.turn).toBe(2);
+
+      // 9. RESOLUTION -> TURN_END (Enemy)
+      expect(endResolution(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+      expect(state.activeSide).toBe('enemy');
+      expect(state.turn).toBe(2);
+
+      // 10. TURN_END -> Hand-off (Enemy -> Player, turn becomes 3, automatically begins next turn and lands in DEPLOYMENT)
+      expect(endTurn(state)).toBe(true);
+      expect(state.phase).toBe('DEPLOYMENT');
+      expect(state.activeSide).toBe('player');
+      expect(state.turn).toBe(3);
     });
 
-    it('rejects beginTurn transition and leaves state unchanged if current phase is not TURN_START', () => {
+    it('rejects invalid phase transitions and guards state integrity', () => {
       const state: CombatState = {
         playerSquads: [],
         enemySquads: [],
@@ -471,12 +525,59 @@ describe('Combat Model Data structures', () => {
         deploymentConfirmed: false,
         activeSide: 'player',
         turn: 1,
-        phase: 'DEPLOYMENT', // Not TURN_START
+        phase: 'TURN_START',
       };
 
-      const success = beginTurn(state);
-      expect(success).toBe(false);
+      // 1. From TURN_START, only beginTurn() is valid.
+      expect(confirmDeployment(state)).toBe(false);
+      expect(confirmAttack(state)).toBe(false);
+      expect(endResolution(state)).toBe(false);
+      expect(endTurn(state)).toBe(false);
+      expect(state.phase).toBe('TURN_START'); // unchanged
+
+      // Transition to DEPLOYMENT
+      expect(beginTurn(state)).toBe(true);
+      expect(state.phase).toBe('DEPLOYMENT');
+
+      // 2. From DEPLOYMENT, only confirmDeployment() is valid.
+      expect(beginTurn(state)).toBe(false);
+      expect(confirmAttack(state)).toBe(false);
+      expect(endResolution(state)).toBe(false);
+      expect(endTurn(state)).toBe(false);
       expect(state.phase).toBe('DEPLOYMENT'); // unchanged
+
+      // Transition to ACTION
+      expect(confirmDeployment(state)).toBe(true);
+      expect(state.phase).toBe('ACTION');
+
+      // 3. From ACTION, only confirmAttack() is valid.
+      expect(beginTurn(state)).toBe(false);
+      expect(confirmDeployment(state)).toBe(false);
+      expect(endResolution(state)).toBe(false);
+      expect(endTurn(state)).toBe(false);
+      expect(state.phase).toBe('ACTION'); // unchanged
+
+      // Transition to RESOLUTION
+      expect(confirmAttack(state)).toBe(true);
+      expect(state.phase).toBe('RESOLUTION');
+
+      // 4. From RESOLUTION, only endResolution() is valid.
+      expect(beginTurn(state)).toBe(false);
+      expect(confirmDeployment(state)).toBe(false);
+      expect(confirmAttack(state)).toBe(false);
+      expect(endTurn(state)).toBe(false);
+      expect(state.phase).toBe('RESOLUTION'); // unchanged
+
+      // Transition to TURN_END
+      expect(endResolution(state)).toBe(true);
+      expect(state.phase).toBe('TURN_END');
+
+      // 5. From TURN_END, only endTurn() is valid.
+      expect(beginTurn(state)).toBe(false);
+      expect(confirmDeployment(state)).toBe(false);
+      expect(confirmAttack(state)).toBe(false);
+      expect(endResolution(state)).toBe(false);
+      expect(state.phase).toBe('TURN_END'); // unchanged
     });
   });
 

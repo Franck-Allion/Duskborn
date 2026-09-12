@@ -547,13 +547,13 @@ Exact naming may follow existing project conventions.
 * [x] Start combat with the player as active side
 * [x] Implement `TURN_START`
 * [x] Transition `TURN_START → DEPLOYMENT`
-* [ ] Transition `DEPLOYMENT → ACTION`
-* [ ] Add Confirm Attack transition from `ACTION → RESOLUTION`
-* [ ] Transition `RESOLUTION → TURN_END`
-* [ ] Switch active side during `TURN_END`
-* [ ] Start the next side's turn
-* [ ] Prevent actions that are invalid for the current phase
-* [ ] Add turn-state tests
+* [x] Transition `DEPLOYMENT → ACTION`
+* [x] Add Confirm Attack transition from `ACTION → RESOLUTION`
+* [x] Transition `RESOLUTION → TURN_END`
+* [x] Switch active side during `TURN_END`
+* [x] Start the next side's turn
+* [x] Prevent actions that are invalid for the current phase
+* [x] Add turn-state tests
 
 Do not implement enemy intentions.
 
