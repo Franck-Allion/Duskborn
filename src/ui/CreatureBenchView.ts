@@ -13,6 +13,7 @@ export class CreatureBenchView {
   private cardViews = new Map<string, CreatureCardView>();
   private backgroundTray: Phaser.GameObjects.Graphics | null = null;
   private visible = true;
+  private currentState: CombatState | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -47,6 +48,8 @@ export class CreatureBenchView {
   }
 
   public refresh(state: CombatState): void {
+    this.currentState = state;
+
     if (!this.visible) {
       this.setVisible(false);
       return;
@@ -111,13 +114,15 @@ export class CreatureBenchView {
       let view = this.cardViews.get(creatureCard.instanceId);
       const isNew = !view;
 
+      const descriptionText = isDeployed ? 'DEPLOYED ON GRID' : 'READY TO DEPLOY';
+
       if (!view) {
         // Create new CreatureCardView starting slightly below with alpha 0 and scale 0.9 (card entry tween)
         view = new CreatureCardView(this.scene, transform.x, transform.y + 35, {
           instanceId: creatureCard.instanceId,
           contentId: creatureCard.unitTypeId,
           name: unitDef?.name ?? creatureCard.unitTypeId,
-          description: isDeployed ? 'DEPLOYED ON GRID' : 'READY TO DEPLOY',
+          description: descriptionText,
           count,
           isDeployed,
         });
@@ -125,21 +130,32 @@ export class CreatureBenchView {
         view.setScale(0.9);
         this.cardViews.set(creatureCard.instanceId, view);
 
-        // Bind click trigger selection
+        // Bind click trigger selection dynamically to prevent stale state closures
         view.on('pointerdown', () => {
-          if (isInteractive && squadIndex !== -1) {
-            if (isSelected) {
-              this.onSelect(null); // deselect
-            } else {
-              this.onSelect(squadIndex); // select
+          const current = this.currentState;
+          if (current) {
+            const isCurrentPlayerTurn = current.activeSide === 'player';
+            const isCurrentInteractive = isCurrentPlayerTurn && current.phase === 'DEPLOYMENT';
+            if (isCurrentInteractive) {
+              const currentSquadIndex = current.playerSquads.findIndex((s) => s.unitTypeId === creatureCard.unitTypeId);
+              if (currentSquadIndex !== -1) {
+                if (this.selectedSquadIndex === currentSquadIndex) {
+                  this.onSelect(null); // deselect
+                } else {
+                  this.onSelect(currentSquadIndex); // select
+                }
+              }
             }
           }
         });
+      } else {
+        // Correctly update dynamic count text, rules description, and deployed status of existing CardViews on reflow
+        view.updateDynamicContent({
+          count,
+          description: descriptionText,
+          isDeployed,
+        });
       }
-
-      // Update dynamic deployed / description / count state
-      view.config.isDeployed = isDeployed;
-      view.config.count = count;
 
       // Determine visual state
       let targetVisualState: CardVisualState = 'IDLE';

@@ -9,7 +9,7 @@ Duskborn uses a reusable, premium, high-DPI card-rendering system. This document
 Every card frame (front and back) must adhere to a fixed production portrait aspect ratio.
 
 * **Source Dimensions:** `768 × 1080 px`
-* **Aspect Ratio:** `0.711111...` (exactly 13:9 ratio proportional)
+* **Aspect Ratio:** `32:45` (width / height ≈ `0.711111`)
 * **Format:** `32-bit PNG (with transparency where appropriate)`
 * **Color Profile:** `sRGB`
 * **Design Rule:** No gameplay text, Mana costs, names, level badges, or stats should be baked directly into the PNG asset. All gameplay text is dynamically rendered via Phaser high-DPI text overlays to support future language localization.

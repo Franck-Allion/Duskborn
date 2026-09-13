@@ -14,6 +14,7 @@ export class CombatHandView {
   private cardViews = new Map<string, SpellCardView>();
   private backgroundTray: Phaser.GameObjects.Graphics | null = null;
   private visible = true;
+  private currentState: CombatState | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -45,6 +46,8 @@ export class CombatHandView {
   }
 
   public refresh(state: CombatState): void {
+    this.currentState = state;
+
     if (!this.visible) {
       this.setVisible(false);
       return;
@@ -117,11 +120,15 @@ export class CombatHandView {
         view.setScale(0.9);
         this.cardViews.set(spellCard.instanceId, view);
 
-        // Bind play trigger interaction
+        // Bind play trigger interaction dynamically to prevent stale state closures
         view.on('pointerdown', () => {
-          if (isInteractive && isSpellCardPlayable(state, spellCard.spellId)) {
-            // Trigger quick visual press squash and dispatch play
-            this.play(spellCard.spellId);
+          const current = this.currentState;
+          if (current) {
+            const isCurrentPlayerTurn = current.activeSide === 'player';
+            const isCurrentInteractive = isCurrentPlayerTurn && current.phase === 'ACTION';
+            if (isCurrentInteractive && isSpellCardPlayable(current, spellCard.spellId)) {
+              this.play(spellCard.spellId);
+            }
           }
         });
       }

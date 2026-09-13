@@ -24,15 +24,6 @@ export interface CardViewConfig {
 
 /**
  * Reusable premium Phaser 4 component representing a cohesive Combat Card.
- * 
- * Hierarchy:
- * - Shadow Layer (Outer depth)
- * - Backing Plate (Layered materials)
- * - Artwork (Masked & Hover Parallax)
- * - Art Window Border/Frame
- * - Title Nameplate & Rules Panel
- * - Stat Badges (Mana gems / Shield Banners)
- * - State Overlays & Playable Glow
  */
 export class CardView extends Phaser.GameObjects.Container {
   protected shadow!: Phaser.GameObjects.Graphics;
@@ -52,6 +43,9 @@ export class CardView extends Phaser.GameObjects.Container {
   protected widthVal: number;
   protected heightVal: number;
 
+  protected artBaseX: number = 0;
+  protected artBaseY: number = 0;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -66,6 +60,10 @@ export class CardView extends Phaser.GameObjects.Container {
     this.heightVal = isBench ? 123.75 : CARD_HEIGHT;
 
     this.setSize(this.widthVal, this.heightVal);
+
+    this.artBaseX = 0;
+    this.artBaseY = -this.heightVal * 0.16;
+
     this.createHierarchy();
     this.setVisualState('IDLE');
 
@@ -122,8 +120,12 @@ export class CardView extends Phaser.GameObjects.Container {
       : `card-art-creature-${this.config.contentId}`;
 
     if (this.scene.textures.exists(artKey)) {
-      const artImg = this.scene.add.image(0, -h * 0.16, artKey);
-      artImg.setDisplaySize(artW, artH);
+      const artImg = this.scene.add.image(this.artBaseX, this.artBaseY, artKey);
+      
+      // Real Aspect-ratio Cover/Crop calculation
+      const scale = Math.max(artW / artImg.width, artH / artImg.height);
+      artImg.setScale(scale);
+      
       this.art = artImg;
       this.artContainer.add(artImg);
     } else {
@@ -132,20 +134,20 @@ export class CardView extends Phaser.GameObjects.Container {
       artG.fillStyle(isSpell ? 0x1d4ed8 : 0x7c2d12, 1);
       artG.fillRoundedRect(artX, artY, artW, artH, 6);
       
-      // Draw procedural magic symbol or shield
+      // Draw procedural magic symbol or shield centered at slot base Y
       artG.lineStyle(1.5, isSpell ? 0x60a5fa : 0xf97316, 0.6);
       if (isSpell) {
-        artG.strokeCircle(0, -h * 0.16, artW * 0.2);
-        artG.strokeRect(-4, -h * 0.16 - 4, 8, 8);
+        artG.strokeCircle(this.artBaseX, this.artBaseY, artW * 0.2);
+        artG.strokeRect(this.artBaseX - 4, this.artBaseY - 4, 8, 8);
       } else {
         // Shield outline
         artG.beginPath();
-        artG.moveTo(0, -h * 0.16 - 12);
-        artG.lineTo(10, -h * 0.16 - 6);
-        artG.lineTo(8, -h * 0.16 + 8);
-        artG.lineTo(0, -h * 0.16 + 14);
-        artG.lineTo(-8, -h * 0.16 + 8);
-        artG.lineTo(-10, -h * 0.16 - 6);
+        artG.moveTo(this.artBaseX, this.artBaseY - 12);
+        artG.lineTo(this.artBaseX + 10, this.artBaseY - 6);
+        artG.lineTo(this.artBaseX + 8, this.artBaseY + 8);
+        artG.lineTo(this.artBaseX, this.artBaseY + 14);
+        artG.lineTo(this.artBaseX - 8, this.artBaseY + 8);
+        artG.lineTo(this.artBaseX - 10, this.artBaseY - 6);
         artG.closePath();
         artG.strokePath();
       }
@@ -279,6 +281,39 @@ export class CardView extends Phaser.GameObjects.Container {
       if (this.visualState !== 'DISABLED') {
         this.setVisualState(this.config.isDeployed ? 'DEPLOYED' : 'IDLE');
       }
+      
+      // Reset artwork shift smoothly back to base position on pointerout
+      if (this.art) {
+        this.scene.tweens.killTweensOf(this.art);
+        this.scene.tweens.add({
+          targets: this.art,
+          x: this.artBaseX,
+          y: this.artBaseY,
+          duration: 120,
+          ease: 'Quad.Out',
+        });
+      }
+    });
+
+    this.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.visualState === 'HOVER') {
+        // Pointer position relative to container center
+        const localX = pointer.x - this.x;
+        const localY = pointer.y - this.y;
+
+        const halfW = this.widthVal / 2;
+        const halfH = this.heightVal / 2;
+
+        const normalizedX = Phaser.Math.Clamp(localX / halfW, -1, 1);
+        const normalizedY = Phaser.Math.Clamp(localY / halfH, -1, 1);
+
+        const px = normalizedX * 2.5; // max +-2.5 px
+        const py = normalizedY * 1.5; // max +-1.5 px
+
+        if (this.art) {
+          this.art.setPosition(this.artBaseX + px, this.artBaseY + py);
+        }
+      }
     });
 
     this.on('pointerdown', () => {
@@ -297,10 +332,37 @@ export class CardView extends Phaser.GameObjects.Container {
     });
   }
 
+  /**
+   * Updates dynamic card content (e.g. soldier counts, description texts, deployed states)
+   * on the fly, instantly refreshing the actual GameObjects and text overlays.
+   */
+  public updateDynamicContent(dynamic: {
+    count?: number;
+    description?: string;
+    isDeployed?: boolean;
+  }): void {
+    if (dynamic.count !== undefined) {
+      if (this.badgeText) {
+        this.badgeText.setText(this.cardType === 'CREATURE' ? `x${dynamic.count}` : String(dynamic.count));
+      }
+    }
+
+    if (dynamic.description !== undefined) {
+      if (this.rulesText) {
+        this.rulesText.setText(dynamic.description);
+      }
+    }
+
+    if (dynamic.isDeployed !== undefined) {
+      this.config.isDeployed = dynamic.isDeployed;
+      this.setVisualState(dynamic.isDeployed ? 'DEPLOYED' : 'IDLE');
+    }
+  }
+
   public setVisualState(state: CardVisualState): void {
     this.visualState = state;
 
-    // Reset components to state-specific configurations
+    // 1. Playable or Hover outer glow (Back glow Graphics outline fallback)
     if (state === 'HOVER') {
       this.playGlow.setVisible(true);
       this.playGlow.lineStyle(4, 0xfca5a5, 0.9); // lighter highlight
@@ -311,29 +373,37 @@ export class CardView extends Phaser.GameObjects.Container {
       this.playGlow.lineStyle(4, 0x60a5fa, 0.8); // soft playable blue glow
       this.shadow.setScale(1.0);
       this.shadow.setAlpha(0.4);
+    } else if (state === 'SELECTED') {
+      this.playGlow.setVisible(true);
+      this.playGlow.lineStyle(4, 0xfbbf24, 0.9); // golden selected glow
+      this.shadow.setScale(1.0);
+      this.shadow.setAlpha(0.4);
     } else {
       this.playGlow.setVisible(false);
       this.shadow.setScale(1.0);
       this.shadow.setAlpha(0.4);
     }
 
-    // Saturation and dimming for state overlays
+    // 2. Playable & Hover effects via Phaser 4 native filter triggers (if supported/practical)
+    try {
+      const targets = [this.frame, this.art].filter((t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image);
+      
+      for (const img of targets) {
+        if (state === 'DISABLED' || state === 'DEPLOYED') {
+          // Native Gray/Desaturate fallback
+          img.setTint(0x7f7f7f);
+        } else {
+          img.clearTint();
+        }
+      }
+    } catch {
+      // Safe fallback if native filters fail or aren't supported on canvas
+    }
+
+    // 3. Fallback alpha overlay adjustments
     if (state === 'DISABLED' || state === 'DEPLOYED') {
-      // Lower saturation / brightness tint overlays
-      if (this.frame instanceof Phaser.GameObjects.Image) {
-        this.frame.setTint(0x6b7280); // dark dim grey
-      }
-      if (this.art instanceof Phaser.GameObjects.Image) {
-        this.art.setTint(0x4b5563);
-      }
       this.setAlpha(state === 'DEPLOYED' ? 0.7 : 0.55);
     } else {
-      if (this.frame instanceof Phaser.GameObjects.Image) {
-        this.frame.clearTint();
-      }
-      if (this.art instanceof Phaser.GameObjects.Image) {
-        this.art.clearTint();
-      }
       this.setAlpha(1.0);
     }
   }
