@@ -6,7 +6,7 @@ import {
   tryUseAbility,
   resolveActiveSideAttack,
   endTurn,
-  applyCombatResultToRunState,
+  applyCombatVictoryToRunState,
   type CombatState,
 } from '../game/combat/CombatState';
 import { orchestrateAutomaticPhases } from '../game/combat/EnemyTurnAI';
@@ -125,23 +125,13 @@ export class CombatActionPanel {
           'Return to Map',
           () => {
             const runState = (this.scene as unknown as { runState: RunState }).runState;
-            applyCombatResultToRunState(state, runState);
+            applyCombatVictoryToRunState(state, runState);
             this.scene.scene.start('map');
           },
           0x10b981,
         );
       } else if (state.phase === 'DEFEAT') {
         this.text(y, 'DEFEAT!\n\nYour hero has fallen in battle.', '#f87171');
-        this.button(
-          470,
-          'Return to Map',
-          () => {
-            const runState = (this.scene as unknown as { runState: RunState }).runState;
-            applyCombatResultToRunState(state, runState);
-            this.scene.scene.start('map');
-          },
-          0xef4444,
-        );
       } else if (state.activeSide === 'player') {
         if (state.phase === 'RESOLUTION') {
           this.button(

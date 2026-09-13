@@ -102,6 +102,9 @@ export class CombatScene extends Phaser.Scene {
       selectedPlayerAbilities: {},
       selectedEnemyAbilities: {},
     };
+    this.combatState.participatingPlayerUnitTypeIds = this.combatState.playerSquads
+      .filter((s) => s.count > 0)
+      .map((s) => s.unitTypeId);
     beginTurn(this.combatState);
 
     // Outer framing box

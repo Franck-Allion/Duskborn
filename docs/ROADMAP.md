@@ -943,15 +943,15 @@ Player hero HP <= 0
 
 Losing all squads does not by itself end combat.
 
-* [ ] Detect player victory from enemy hero HP
-* [ ] Detect player defeat from player hero HP
-* [ ] Check result after attack resolution
-* [ ] Stop turn transitions when combat has ended
-* [ ] Display combat result
-* [ ] Preserve surviving player squad counts
-* [ ] Preserve partially damaged surviving units
-* [ ] Preserve relevant run resources
-* [ ] Add combat-result tests
+* [x] Detect player victory from enemy hero HP
+* [x] Detect player defeat from player hero HP
+* [x] Check result after attack resolution
+* [x] Stop turn transitions when combat has ended
+* [x] Display combat result
+* [x] Preserve surviving player squad counts
+* [x] Preserve partially damaged surviving units
+* [x] Preserve relevant run resources
+* [x] Add combat-result tests
 
 Do not automatically restore defeated units after combat.
 
@@ -974,11 +974,11 @@ Archers Lv.3
 
 All current and future units of that type use the same progression.
 
-* [ ] Create `UnitTypeProgression`
-* [ ] Track XP per unit type during the run
-* [ ] Track level per unit type
-* [ ] Award unit-type XP after combat
-* [ ] Add simple level thresholds
+* [x] Create `UnitTypeProgression`
+* [x] Track XP per unit type during the run
+* [x] Track level per unit type
+* [x] Award unit-type XP after combat
+* [x] Add simple level thresholds
 * [ ] Add one ability unlock choice when a unit type levels up
 * [ ] Store unlocked abilities per unit type
 * [ ] Ensure newly recruited units inherit current type level/abilities

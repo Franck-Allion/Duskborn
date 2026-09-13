@@ -1,5 +1,12 @@
 import type { Squad } from '../combat/Squad';
 
+export interface UnitTypeProgression {
+  unitTypeId: string;
+  level: number;
+  xp: number;
+  unlockedAbilities: string[];
+}
+
 export type RunPhase = 'exploration' | 'combat';
 
 export interface RunState {
@@ -13,6 +20,7 @@ export interface RunState {
     army: number;
   };
   playerSquads?: Squad[];
+  unitTypeProgression: Record<string, UnitTypeProgression>;
 }
 
 /**
@@ -28,6 +36,20 @@ export function createInitialRunState(): RunState {
       gold: 0,
       mana: 0,
       army: 10,
+    },
+    unitTypeProgression: {
+      guardian: {
+        unitTypeId: 'guardian',
+        level: 1,
+        xp: 0,
+        unlockedAbilities: [],
+      },
+      archer: {
+        unitTypeId: 'archer',
+        level: 1,
+        xp: 0,
+        unlockedAbilities: [],
+      },
     },
   };
 }

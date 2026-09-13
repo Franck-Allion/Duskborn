@@ -75,6 +75,8 @@ export interface CombatState {
   enemyPlayedSpells?: string[];
   playerHeroShield?: number;
   enemyHeroShield?: number;
+  participatingPlayerUnitTypeIds?: string[];
+  hasVictoryBeenFinalized?: boolean;
 }
 
 /**
@@ -689,14 +691,60 @@ export function updateCombatResultPhase(state: CombatState): boolean {
   return false;
 }
 
+export const COMBAT_VICTORY_XP_PER_UNIT_TYPE = 50;
+
+/**
+ * Retrieves the cumulative XP required to reach a specific level.
+ * Level 1 -> 2: 100 total XP
+ * Level 2 -> 3: 250 total XP
+ * Level 3 -> 4: 450 total XP
+ */
+export function getXpRequiredForLevel(level: number): number {
+  if (level <= 1) return 0;
+  if (level === 2) return 100;
+  if (level === 3) return 250;
+  if (level === 4) return 450;
+  return 450 + (level - 4) * 300;
+}
+
+/**
+ * Calculates the level from a cumulative XP amount.
+ * Correctly handles crossing multiple thresholds in one award.
+ */
+export function calculateLevelFromXp(xp: number): number {
+  let level = 1;
+  while (true) {
+    const required = getXpRequiredForLevel(level + 1);
+    if (xp >= required) {
+      level++;
+    } else {
+      break;
+    }
+  }
+  return level;
+}
+
 /**
  * Preserves the surviving player squad counts and partially damaged units
- * in the RunState roster on victory, and changes run phase back to exploration.
+ * in the RunState roster on victory, and awards unit-type XP & calculates levels.
+ * Returns true if victory was successfully finalized, or false if not in VICTORY phase
+ * or if already finalized (idempotency/double-finalization protection).
  */
-export function applyCombatResultToRunState(
+export function applyCombatVictoryToRunState(
   state: CombatState,
   runState: RunState,
-): void {
+): boolean {
+  // Reject non-VICTORY states
+  if (state.phase !== 'VICTORY') {
+    return false;
+  }
+
+  // Idempotency / Double finalization guard
+  if (state.hasVictoryBeenFinalized) {
+    return false;
+  }
+  state.hasVictoryBeenFinalized = true;
+
   // Map surviving squads back to runState, resetting positions to null
   runState.playerSquads = state.playerSquads.map((s) => ({
     unitTypeId: s.unitTypeId,
@@ -709,8 +757,27 @@ export function applyCombatResultToRunState(
   const totalArmy = state.playerSquads.reduce((sum, s) => sum + s.count, 0);
   runState.resources.army = totalArmy;
 
+  // Award unit-type XP to participating player unit types on victory
+  if (state.participatingPlayerUnitTypeIds) {
+    runState.unitTypeProgression ??= {};
+    for (const typeId of state.participatingPlayerUnitTypeIds) {
+      // Ensure progression record exists in RunState
+      runState.unitTypeProgression[typeId] ??= {
+        unitTypeId: typeId,
+        level: 1,
+        xp: 0,
+        unlockedAbilities: [],
+      };
+
+      const prog = runState.unitTypeProgression[typeId];
+      prog.xp += COMBAT_VICTORY_XP_PER_UNIT_TYPE;
+      prog.level = calculateLevelFromXp(prog.xp);
+    }
+  }
+
   // Change run phase back to exploration
   runState.phase = 'exploration';
+  return true;
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
   getCombatResult,
-  applyCombatResultToRunState,
+  applyCombatVictoryToRunState,
   resolveActiveSideAttack,
   endTurn,
 } from '../src/game/combat/CombatState';
@@ -173,7 +173,9 @@ describe('combat-result evaluation and orchestration tests', () => {
       },
     ];
 
-    applyCombatResultToRunState(state, runState);
+    state.phase = 'VICTORY';
+    const success = applyCombatVictoryToRunState(state, runState);
+    expect(success).toBe(true);
 
     // Expect runState phase goes back to exploration
     expect(runState.phase).toBe('exploration');
