@@ -982,10 +982,10 @@ All current and future units of that type use the same progression.
 * [x] Track level per unit type
 * [x] Award unit-type XP after combat
 * [x] Add simple level thresholds
-* [ ] Add one ability unlock choice when a unit type levels up
-* [ ] Store unlocked abilities per unit type
-* [ ] Ensure newly recruited units inherit current type level/abilities
-* [ ] Add progression tests
+* [x] Add one ability unlock choice when a unit type levels up
+* [x] Store unlocked abilities per unit type
+* [x] Ensure newly recruited units inherit current type level/abilities
+* [x] Add progression tests
 
 Example direction:
 

@@ -7,6 +7,7 @@ import {
   resolveActiveSideAttack,
   endTurn,
   applyCombatVictoryToRunState,
+  getEffectiveAbilitiesForUnitType,
   type CombatState,
 } from '../game/combat/CombatState';
 import { orchestrateAutomaticPhases } from '../game/combat/EnemyTurnAI';
@@ -50,7 +51,8 @@ export class CombatActionPanel {
       y += 20;
       const selected = selections[squad.unitTypeId];
       if (interactive && selected === undefined) {
-        for (const id of unit?.abilities ?? []) {
+        const allowedAbilities = getEffectiveAbilitiesForUnitType(state, 'player', squad.unitTypeId);
+        for (const id of allowedAbilities) {
           const ability = ABILITY_REGISTRY.get(id);
           if (!ability) continue;
           this.button(y, `${ability.name} (${ability.manaCost} Mana)`, () => {

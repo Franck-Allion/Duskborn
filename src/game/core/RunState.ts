@@ -7,6 +7,11 @@ export interface UnitTypeProgression {
   unlockedAbilities: string[];
 }
 
+export interface PendingAbilityUnlockChoice {
+  unitTypeId: string;
+  options: string[];
+}
+
 export type RunPhase = 'exploration' | 'combat';
 
 export interface RunState {
@@ -21,6 +26,7 @@ export interface RunState {
   };
   playerSquads?: Squad[];
   unitTypeProgression: Record<string, UnitTypeProgression>;
+  pendingAbilityUnlockChoices: PendingAbilityUnlockChoice[];
 }
 
 /**
@@ -51,5 +57,6 @@ export function createInitialRunState(): RunState {
         unlockedAbilities: [],
       },
     },
+    pendingAbilityUnlockChoices: [],
   };
 }

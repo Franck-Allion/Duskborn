@@ -11,6 +11,7 @@ import type { CombatState } from '../game/combat/CombatState';
 import {
   isSideDeploymentValid,
   getUncoveredOpponentColumns,
+  getAvailableAbilitiesForUnitType,
   beginTurn,
   confirmDeployment,
   canRepositionSquad,
@@ -108,6 +109,13 @@ export class CombatScene extends Phaser.Scene {
     this.combatState.participatingPlayerUnitTypeIds = this.combatState.playerSquads
       .filter((s) => s.count > 0)
       .map((s) => s.unitTypeId);
+
+    const playerAvailableAbilities: Record<string, string[]> = {};
+    for (const squad of this.combatState.playerSquads) {
+      playerAvailableAbilities[squad.unitTypeId] = getAvailableAbilitiesForUnitType(this.runState, squad.unitTypeId);
+    }
+    this.combatState.playerAvailableAbilities = playerAvailableAbilities;
+
     beginTurn(this.combatState);
 
     // Outer framing box

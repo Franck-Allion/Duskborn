@@ -14,7 +14,7 @@ import type { RunState } from '../core/RunState';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
 import { ABILITY_REGISTRY } from '../content/abilities';
-import { UNIT_REGISTRY } from '../content/unitTypes';
+import { UNIT_REGISTRY, UNIT_PROGRESSION_UNLOCKS } from '../content/unitTypes';
 
 export type CombatPhase =
   | 'TURN_START'
@@ -77,6 +77,7 @@ export interface CombatState {
   enemyHeroShield?: number;
   participatingPlayerUnitTypeIds?: string[];
   hasVictoryBeenFinalized?: boolean;
+  playerAvailableAbilities?: Record<string, string[]>;
 }
 
 /**
@@ -91,6 +92,22 @@ export function hasDuplicateUnitTypes(squads: readonly Squad[]): boolean {
     seen.add(squad.unitTypeId);
   }
   return false;
+}
+
+/**
+ * Retrieves the effective available abilities for a unit type.
+ * Symmetrically falls back to the static unit definition (baseline abilities) if no run snapshot is present.
+ */
+export function getEffectiveAbilitiesForUnitType(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+): readonly string[] {
+  if (side === 'player' && state.playerAvailableAbilities && state.playerAvailableAbilities[unitTypeId]) {
+    return state.playerAvailableAbilities[unitTypeId];
+  }
+  const unit = UNIT_REGISTRY.get(unitTypeId);
+  return unit?.abilities ?? [];
 }
 
 /**
@@ -272,12 +289,12 @@ export function canConfirmAttack(state: CombatState): boolean {
   const selections = player ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
   return squads.filter((squad) => squad.count > 0).every((squad) => {
     const abilityId = selections[squad.unitTypeId];
-    const unit = UNIT_REGISTRY.get(squad.unitTypeId);
     const validPosition = squad.position !== null && (player
       ? isPlayerDeploymentPosition(squad.position)
       : isEnemyDeploymentPosition(squad.position));
+    const allowedAbilities = getEffectiveAbilitiesForUnitType(state, player ? 'player' : 'enemy', squad.unitTypeId);
     return validPosition && abilityId !== undefined &&
-      ABILITY_REGISTRY.has(abilityId) && !!unit?.abilities.includes(abilityId);
+      ABILITY_REGISTRY.has(abilityId) && allowedAbilities.includes(abilityId);
   });
 }
 
@@ -608,7 +625,8 @@ export function tryUseAbility(
 
   // 2. Validate unit type exists and owns the ability
   const unitDef = UNIT_REGISTRY.get(unitTypeId);
-  if (!unitDef || !unitDef.abilities.includes(abilityId)) {
+  const allowedAbilities = getEffectiveAbilitiesForUnitType(state, side, unitTypeId);
+  if (!unitDef || !allowedAbilities.includes(abilityId)) {
     return false;
   }
 
@@ -866,13 +884,118 @@ export function applyCombatVictoryToRunState(
       };
 
       const prog = runState.unitTypeProgression[typeId];
+      const oldLevel = prog.level;
+
       prog.xp += COMBAT_VICTORY_XP_PER_UNIT_TYPE;
-      prog.level = calculateLevelFromXp(prog.xp);
+      const newLevel = calculateLevelFromXp(prog.xp);
+      prog.level = newLevel;
+
+      // If the level has increased, check if we should create a pending unlock choice
+      if (newLevel > oldLevel) {
+        const unlockDef = UNIT_PROGRESSION_UNLOCKS[typeId];
+        if (unlockDef) {
+          const currentlyUnlocked = new Set(prog.unlockedAbilities);
+          const availableOptions = unlockDef.abilityUnlocks.filter((abi) => !currentlyUnlocked.has(abi));
+
+          if (availableOptions.length > 0) {
+            // Symmetrically create a choice for each crossed level >= 2
+            for (let lvl = oldLevel + 1; lvl <= newLevel; lvl++) {
+              if (lvl >= 2) {
+                // Ensure we don't offer options already pending in another choice for this type
+                const alreadyChosenOptions = new Set(
+                  (runState.pendingAbilityUnlockChoices ?? [])
+                    .filter((c) => c.unitTypeId === typeId)
+                    .flatMap((c) => c.options)
+                );
+                const optionsForThisChoice = availableOptions.filter((abi) => !alreadyChosenOptions.has(abi));
+
+                if (optionsForThisChoice.length > 0) {
+                  runState.pendingAbilityUnlockChoices ??= [];
+                  runState.pendingAbilityUnlockChoices.push({
+                    unitTypeId: typeId,
+                    options: optionsForThisChoice,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 
   // Change run phase back to exploration
   runState.phase = 'exploration';
+  return true;
+}
+
+/**
+ * Pure helper to compute the player's effective abilities for a unit type.
+ * Returns baseline UnitType abilities + progression unlocked abilities.
+ * Preferred order: baseline abilities first, then unlocks in acquisition order, with duplicates removed.
+ */
+export function getAvailableAbilitiesForUnitType(
+  runState: RunState,
+  unitTypeId: string,
+): string[] {
+  const unit = UNIT_REGISTRY.get(unitTypeId);
+  const baseline = unit?.abilities ?? [];
+
+  const progression = runState.unitTypeProgression?.[unitTypeId];
+  const unlocked = progression?.unlockedAbilities ?? [];
+
+  const set = new Set([...baseline, ...unlocked]);
+  return Array.from(set);
+}
+
+/**
+ * Resolves a pending ability unlock choice for a unit type.
+ * Rule:
+ * - pending choice must exist
+ * - abilityId must be one of its options
+ * - ability must exist in ABILITY_REGISTRY
+ * - ability must belong to that unit type's progression unlock pool
+ * - ability must not already be unlocked
+ * Returns true if choice resolved successfully, or false otherwise.
+ */
+export function chooseUnitTypeAbilityUnlock(
+  runState: RunState,
+  unitTypeId: string,
+  abilityId: string,
+): boolean {
+  // 1. Validate ability exists in registry
+  if (!ABILITY_REGISTRY.has(abilityId)) {
+    return false;
+  }
+
+  // 2. Validate unit type progression config exists
+  const unlockDef = UNIT_PROGRESSION_UNLOCKS[unitTypeId];
+  if (!unlockDef || !unlockDef.abilityUnlocks.includes(abilityId)) {
+    return false;
+  }
+
+  // 3. Find the pending choice record
+  const choices = runState.pendingAbilityUnlockChoices ?? [];
+  const choiceIndex = choices.findIndex(
+    (c) => c.unitTypeId === unitTypeId && c.options.includes(abilityId)
+  );
+  if (choiceIndex === -1) {
+    return false;
+  }
+
+  // 4. Validate not already unlocked
+  const progression = runState.unitTypeProgression?.[unitTypeId];
+  if (!progression) {
+    return false;
+  }
+  if (progression.unlockedAbilities.includes(abilityId)) {
+    return false;
+  }
+
+  // 5. Success: append to unlockedAbilities and remove the choice
+  progression.unlockedAbilities.push(abilityId);
+  choices.splice(choiceIndex, 1);
+
   return true;
 }
 
@@ -906,8 +1029,8 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
   for (const attacker of activeAttackers) {
     const abilityId = preflightSelections[attacker.unitTypeId];
     if (abilityId !== undefined) {
-      const unit = UNIT_REGISTRY.get(attacker.unitTypeId);
-      if (!ABILITY_REGISTRY.has(abilityId) || !unit?.abilities.includes(abilityId)) {
+      const allowedAbilities = getEffectiveAbilitiesForUnitType(state, side, attacker.unitTypeId);
+      if (!ABILITY_REGISTRY.has(abilityId) || !allowedAbilities.includes(abilityId)) {
         return false;
       }
     }

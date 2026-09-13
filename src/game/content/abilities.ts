@@ -49,6 +49,41 @@ export const DUSKBORN_ARCHER_SHOT: AbilityDefinition = {
   effectId: 'shot',
 };
 
+// --- Progression Unlocked Abilities ---
+export const GUARDIAN_FORTIFIED_STRIKE: AbilityDefinition = {
+  id: 'guardian-fortified-strike',
+  name: 'Fortified Strike',
+  manaCost: 1,
+  effectId: 'strike',
+  positionRule: { depth: 'FRONT' },
+  positionModifier: { type: 'damage', value: 2 },
+};
+
+export const GUARDIAN_BASH: AbilityDefinition = {
+  id: 'guardian-bash',
+  name: 'Bash',
+  manaCost: 1,
+  effectId: 'strike',
+  attackModifier: 1,
+};
+
+export const ARCHER_PIERCING_SHOT: AbilityDefinition = {
+  id: 'archer-piercing-shot',
+  name: 'Piercing Shot',
+  manaCost: 1,
+  effectId: 'shot',
+  attackModifier: 3,
+};
+
+export const ARCHER_VOLLEY: AbilityDefinition = {
+  id: 'archer-volley',
+  name: 'Volley',
+  manaCost: 2,
+  effectId: 'shot',
+  positionRule: { horizontal: 'EDGE' },
+  positionModifier: { type: 'damage', value: 3 },
+};
+
 export const ABILITIES: readonly AbilityDefinition[] = [
   GUARDIAN_STRIKE,
   GUARDIAN_SHIELD_WALL,
@@ -56,6 +91,10 @@ export const ABILITIES: readonly AbilityDefinition[] = [
   ARCHER_POWER_SHOT,
   DUSKBORN_BRUTE_STRIKE,
   DUSKBORN_ARCHER_SHOT,
+  GUARDIAN_FORTIFIED_STRIKE,
+  GUARDIAN_BASH,
+  ARCHER_PIERCING_SHOT,
+  ARCHER_VOLLEY,
 ];
 
 /**

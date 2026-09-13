@@ -49,3 +49,19 @@ export const UNIT_TYPES: readonly UnitType[] = [
 export const UNIT_REGISTRY: ReadonlyMap<string, UnitType> = new Map(
   UNIT_TYPES.map((unit) => [unit.id, unit]),
 );
+
+export interface UnitTypeProgressionDefinition {
+  readonly unitTypeId: string;
+  readonly abilityUnlocks: readonly string[];
+}
+
+export const UNIT_PROGRESSION_UNLOCKS: Record<string, UnitTypeProgressionDefinition> = {
+  guardian: {
+    unitTypeId: 'guardian',
+    abilityUnlocks: ['guardian-fortified-strike', 'guardian-bash'],
+  },
+  archer: {
+    unitTypeId: 'archer',
+    abilityUnlocks: ['archer-piercing-shot', 'archer-volley'],
+  },
+};
