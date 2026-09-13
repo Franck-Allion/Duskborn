@@ -24,6 +24,7 @@ import {
   DEFAULT_COMBAT_MAX_MANA,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
+  executeOpeningDraw,
 } from '../game/combat/CombatState';
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
@@ -125,14 +126,27 @@ export class CombatScene extends Phaser.Scene {
       selectedEnemyAbilities: {},
     };
 
+    const fullPlayerSpells = [
+      ...this.combatState.playerDeck.drawPile,
+      ...this.combatState.playerDeck.hand,
+      ...this.combatState.playerDeck.discardPile,
+    ];
+    const fullEnemySpells = [
+      ...this.combatState.enemyDeck.drawPile,
+      ...this.combatState.enemyDeck.hand,
+      ...this.combatState.enemyDeck.discardPile,
+    ];
+
     this.combatState.playerCombatDeck = createInitialPlayerCombatDeck(
       this.combatState.playerSquads,
-      this.combatState.playerDeck.drawPile,
+      fullPlayerSpells,
     );
     this.combatState.enemyCombatDeck = createInitialEnemyCombatDeck(
       this.combatState.enemySquads,
-      this.combatState.enemyDeck.drawPile,
+      fullEnemySpells,
     );
+
+    executeOpeningDraw(this.combatState);
 
     this.combatState.participatingPlayerUnitTypeIds = this.combatState.playerSquads
       .filter((s) => s.count > 0)

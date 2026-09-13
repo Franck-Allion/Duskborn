@@ -505,13 +505,13 @@ Combat starts with:
 
 These cards are selected from their respective eligible pools, removed from the future pool, then all remaining Creature + Spell cards are shuffled into one draw pile.
 
-- [ ] Draw up to 2 Creature cards at combat start
-- [ ] Draw up to 1 Spell card at combat start
-- [ ] Remove opening cards from remaining pool
-- [ ] Shuffle remaining Creature + Spell cards together
-- [ ] Random in gameplay, deterministic under injected/seeded RNG in tests
-- [ ] If a category has too few cards, draw as many as exist
-- [ ] Add opening-draw tests
+- [x] Draw up to 2 Creature cards at combat start
+- [x] Draw up to 1 Spell card at combat start
+- [x] Remove opening cards from remaining pool
+- [x] Shuffle remaining Creature + Spell cards together
+- [x] Random in gameplay, deterministic under injected/seeded RNG in tests
+- [x] If a category has too few cards, draw as many as exist
+- [x] Add opening-draw tests
 
 ### Per-turn draw
 
@@ -536,7 +536,7 @@ Recommended MVP tuning constant:
 MAX_SPELL_HAND = 5
 ```
 
-- [ ] Spell draw enters Spell hand
+- [x] Spell draw enters Spell hand
 - [ ] Spell hand persists between turns
 - [ ] Player is never forced to cast all spells
 - [ ] Hand cannot exceed configured limit
@@ -551,7 +551,7 @@ Recommended MVP tuning constant:
 MAX_CREATURE_BENCH = 5
 ```
 
-- [ ] Creature draw enters Creature bench
+- [x] Creature draw enters Creature bench
 - [ ] Bench persists across player turns in combat
 - [ ] Player is never forced to deploy all bench creatures
 - [ ] Bench cannot exceed configured limit

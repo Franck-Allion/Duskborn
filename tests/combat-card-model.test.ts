@@ -3,6 +3,9 @@ import {
   createInitialPlayerCombatDeck,
   createInitialEnemyCombatDeck,
   shuffleCards,
+  initializeOpeningCombatCards,
+  discardSpellCard,
+  hasDuplicateCardInstances,
   type CombatCard,
   type CreatureCard,
   type SpellCard,
@@ -10,6 +13,13 @@ import {
 import type { Squad } from '../src/game/combat/Squad';
 import { UNIT_REGISTRY } from '../src/game/content/unitTypes';
 import { SPELL_REGISTRY } from '../src/game/content/spells';
+import {
+  executeOpeningDraw,
+  syncUnifiedSpellsFromLegacy,
+  createInitialPlayerSpellDeck,
+  createInitialEnemySpellDeck,
+  type CombatState,
+} from '../src/game/combat/CombatState';
 
 describe('Unified Combat Card Model', () => {
   describe('CombatCard typing and discriminator', () => {
@@ -208,6 +218,228 @@ describe('Unified Combat Card Model', () => {
 
       // Verify it actually permuted from original
       expect(shuffled1).not.toEqual(originalCards);
+    });
+  });
+
+  describe('Opening card draw initialization and hand/bench state', () => {
+    it('performs a standard opening draw with 2 creatures + 3 spells', () => {
+      const squads: Squad[] = [
+        { unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null },
+        { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
+      ];
+      const spells = ['firebolt', 'barrier', 'battle-cry'];
+      const initialDeck = createInitialPlayerCombatDeck(squads, spells);
+
+      // We'll use a fixed sequence of random numbers: always pick the first element (index 0)
+      const mockRandom = () => 0;
+
+      const openingState = initializeOpeningCombatCards(initialDeck, mockRandom);
+
+      expect(openingState.creatureBench.length).toBe(2);
+      expect(openingState.spellHand.length).toBe(1);
+      expect(openingState.drawPile.length).toBe(2);
+      expect(openingState.discardPile.length).toBe(0);
+
+      // Categories are correct
+      expect(openingState.creatureBench.every((c) => c.cardType === 'CREATURE')).toBe(true);
+      expect(openingState.spellHand.every((s) => s.cardType === 'SPELL')).toBe(true);
+
+      // No duplicates across any zones
+      expect(hasDuplicateCardInstances(openingState)).toBe(false);
+    });
+
+    it('remains deterministic under specific random sequence and different sequence selects different cards', () => {
+      const squads: Squad[] = [
+        { unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null },
+        { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
+      ];
+      const spells = ['firebolt', 'barrier', 'battle-cry'];
+      const initialDeck = createInitialPlayerCombatDeck(squads, spells);
+
+      // Random sequence 1: always picks first
+      const seq1 = [0.0, 0.0, 0.0];
+      let idx1 = 0;
+      const rand1 = () => seq1[idx1++];
+
+      // Random sequence 2: picks second (index 1) for creatures, second for spells
+      const seq2 = [0.99, 0.99, 0.99]; // 0.99 * 2 = 1.98 -> index 1, etc.
+      let idx2 = 0;
+      const rand2 = () => seq2[idx2++];
+
+      const state1 = initializeOpeningCombatCards(initialDeck, rand1);
+      const state2 = initializeOpeningCombatCards(initialDeck, rand2);
+
+      expect(state1.creatureBench[0].unitTypeId).toBe('guardian');
+      expect(state1.creatureBench[1].unitTypeId).toBe('archer');
+      expect(state1.spellHand[0].spellId).toBe('firebolt');
+
+      expect(state2.creatureBench[0].unitTypeId).toBe('archer');
+      expect(state2.creatureBench[1].unitTypeId).toBe('guardian');
+      expect(state2.spellHand[0].spellId).toBe('battle-cry');
+    });
+
+    it('handles insufficient creatures or spells gracefully without inventing cards', () => {
+      // 1. Only 1 Creature available
+      const squads1: Squad[] = [
+        { unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null },
+      ];
+      const deck1 = createInitialPlayerCombatDeck(squads1, ['firebolt', 'barrier']);
+      const state1 = initializeOpeningCombatCards(deck1);
+      expect(state1.creatureBench.length).toBe(1);
+      expect(state1.creatureBench[0].unitTypeId).toBe('guardian');
+
+      // 2. No Creatures available
+      const deck2 = createInitialPlayerCombatDeck([], ['firebolt', 'barrier']);
+      const state2 = initializeOpeningCombatCards(deck2);
+      expect(state2.creatureBench.length).toBe(0);
+      expect(state2.spellHand.length).toBe(1);
+
+      // 3. No Spells available
+      const squads3: Squad[] = [
+        { unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null },
+      ];
+      const deck3 = createInitialPlayerCombatDeck(squads3, []);
+      const state3 = initializeOpeningCombatCards(deck3);
+      expect(state3.creatureBench.length).toBe(1);
+      expect(state3.spellHand.length).toBe(0);
+
+      // 4. Empty starting pool
+      const deckEmpty = createInitialPlayerCombatDeck([], []);
+      const stateEmpty = initializeOpeningCombatCards(deckEmpty);
+      expect(stateEmpty.creatureBench.length).toBe(0);
+      expect(stateEmpty.spellHand.length).toBe(0);
+      expect(stateEmpty.drawPile.length).toBe(0);
+      expect(stateEmpty.discardPile.length).toBe(0);
+      expect(hasDuplicateCardInstances(stateEmpty)).toBe(false);
+    });
+
+    it('guarantees double initialization is a safe no-op or returns false', () => {
+      const combat: CombatState = {
+        playerSquads: [{ unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null }],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+        playerMana: { current: 3, max: 3 },
+        enemyMana: { current: 3, max: 3 },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+      };
+
+      combat.playerCombatDeck = createInitialPlayerCombatDeck(combat.playerSquads, combat.playerDeck.drawPile);
+
+      const firstSuccess = executeOpeningDraw(combat);
+      expect(firstSuccess).toBe(true);
+      expect(combat.openingDrawCompleted).toBe(true);
+
+      const beforeState = structuredClone(combat.playerCombatDeck);
+
+      // Second call must return false and not modify the deck further
+      const secondSuccess = executeOpeningDraw(combat);
+      expect(secondSuccess).toBe(false);
+      expect(combat.playerCombatDeck).toEqual(beforeState);
+    });
+
+    it('verifies move from spell hand to discard atomically via discardSpellCard helper', () => {
+      const squads: Squad[] = [];
+      const spells = ['firebolt', 'firebolt', 'barrier'];
+      const cards = createInitialPlayerCombatDeck(squads, spells);
+
+      // Draw all into hand for testing discard
+      cards.spellHand = [...cards.drawPile] as SpellCard[];
+      cards.drawPile = [];
+
+      expect(cards.spellHand.length).toBe(3);
+
+      const cardToDiscard = cards.spellHand[0]; // first firebolt ('spell:firebolt:0')
+      const anotherDuplicate = cards.spellHand[1]; // second firebolt ('spell:firebolt:1')
+
+      const success = discardSpellCard(cards, cardToDiscard.instanceId);
+      expect(success).toBe(true);
+
+      // Exact instance is in discard pile
+      expect(cards.discardPile).toContain(cardToDiscard);
+      expect(cards.spellHand).not.toContain(cardToDiscard);
+
+      // The second duplicate card is unaffected
+      expect(cards.spellHand).toContain(anotherDuplicate);
+      expect(cards.discardPile).not.toContain(anotherDuplicate);
+    });
+
+    it('preserves legacy source integrity and builds starting pool from full starting spell collection', () => {
+      // Create a legacy deck with cards already in hand and discard
+      const legacyDeck = {
+        drawPile: ['firebolt'],
+        hand: ['barrier'],
+        discardPile: ['battle-cry'],
+      };
+
+      const squads = [{ unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null }];
+
+      // Build pool from full collection as done in CombatScene.ts
+      const fullSpells = [
+        ...legacyDeck.drawPile,
+        ...legacyDeck.hand,
+        ...legacyDeck.discardPile,
+      ];
+
+      const pool = createInitialPlayerCombatDeck(squads, fullSpells);
+
+      // Expect 3 spell cards in pool, none should be lost
+      const spellCardsInPool = pool.drawPile.filter((c) => c.cardType === 'SPELL');
+      expect(spellCardsInPool.length).toBe(3);
+      expect(spellCardsInPool.some((c) => c.contentId === 'firebolt')).toBe(true);
+      expect(spellCardsInPool.some((c) => c.contentId === 'barrier')).toBe(true);
+      expect(spellCardsInPool.some((c) => c.contentId === 'battle-cry')).toBe(true);
+    });
+
+    it('synchronizes unified spells from the legacy deck', () => {
+      const legacyDeck = {
+        drawPile: ['firebolt'],
+        hand: ['barrier'],
+        discardPile: ['battle-cry'],
+      };
+
+      const unified = {
+        drawPile: [
+          { instanceId: 'spell:firebolt:0', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'creature:guardian:0', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+        ] as CombatCard[],
+        spellHand: [
+          { instanceId: 'spell:barrier:0', cardType: 'SPELL', contentId: 'barrier', spellId: 'barrier' },
+        ] as SpellCard[],
+        creatureBench: [
+          { instanceId: 'creature:archer:0', cardType: 'CREATURE', contentId: 'archer', unitTypeId: 'archer' },
+        ] as CreatureCard[],
+        discardPile: [
+          { instanceId: 'spell:battle-cry:0', cardType: 'SPELL', contentId: 'battle-cry', spellId: 'battle-cry' },
+        ] as CombatCard[],
+      };
+
+      syncUnifiedSpellsFromLegacy(unified, legacyDeck);
+
+      // Verify spell Hand matches legacy hand
+      expect(unified.spellHand.length).toBe(1);
+      expect(unified.spellHand[0].spellId).toBe('barrier');
+      expect(unified.spellHand[0].instanceId).toBe('spell:barrier:0');
+
+      // Verify draw pile has correct spell and STILL has the Creature card
+      expect(unified.drawPile.length).toBe(2);
+      expect(unified.drawPile.some((c) => c.instanceId === 'creature:guardian:0')).toBe(true);
+      expect(unified.drawPile.some((c) => c.instanceId === 'spell:firebolt:0')).toBe(true);
+
+      // Verify creatureBench was untouched
+      expect(unified.creatureBench.length).toBe(1);
+      expect(unified.creatureBench[0].instanceId).toBe('creature:archer:0');
+
+      // Verify discard pile has correct spell
+      expect(unified.discardPile.length).toBe(1);
+      expect(unified.discardPile[0].contentId).toBe('battle-cry');
+      expect(unified.discardPile[0].instanceId).toBe('spell:battle-cry:0');
     });
   });
 });
