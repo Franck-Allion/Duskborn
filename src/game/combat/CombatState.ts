@@ -17,6 +17,7 @@ import {
   initializeOpeningCombatCards,
   type SpellCard,
   drawCombatCard,
+  type CombatCardDrawResult,
 } from './CombatCard';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
@@ -81,6 +82,7 @@ export interface CombatState {
   openingDrawCompleted?: boolean;
   lastCardDrawTurn?: number;
   lastCardDrawSide?: CombatSide;
+  lastCardDrawResult?: CombatCardDrawResult;
   selectedPlayerAbilities: Record<string, string>;
   selectedEnemyAbilities: Record<string, string>;
   playerPlayedSpells?: string[];
@@ -142,49 +144,15 @@ export function isValidCombatState(state: CombatState): boolean {
  * 4. Faction uniqueness invariants must hold.
  */
 export function isDeploymentValid(state: CombatState): boolean {
-  const activePlayerSquads = state.playerSquads.filter((s) => s.count > 0);
-  const activeEnemySquads = state.enemySquads.filter((s) => s.count > 0);
-
-  // 1. Verify player squads are positioned in the player deployment zone
-  for (const squad of activePlayerSquads) {
-    if (
-      squad.position === null ||
-      !isPlayerDeploymentPosition(squad.position)
-    ) {
-      return false;
-    }
-  }
-
-  // 2. Verify enemy squads are positioned in the enemy deployment zone
-  for (const squad of activeEnemySquads) {
-    if (squad.position === null || !isEnemyDeploymentPosition(squad.position)) {
-      return false;
-    }
-  }
-
-  // 3. Verify no duplicate occupancy across all active squads
-  const allActiveSquads = [...activePlayerSquads, ...activeEnemySquads];
-  const occupied = new Set<string>();
-  for (const squad of allActiveSquads) {
-    if (squad.position === null) {
-      return false;
-    }
-    const key = `${squad.position.column},${squad.position.row}`;
-    if (occupied.has(key)) {
-      return false;
-    }
-    occupied.add(key);
-  }
-
-  // 4. Verify no duplicate unit types on either side
-  if (
-    hasDuplicateUnitTypes(activePlayerSquads) ||
-    hasDuplicateUnitTypes(activeEnemySquads)
-  ) {
+  if (!isDeploymentStructureValid(state)) {
     return false;
   }
 
-  return true;
+  // Legacy isDeploymentValid requires ALL surviving squads on both sides to be positioned
+  const allPlayerPositioned = state.playerSquads.filter((s) => s.count > 0).every((s) => s.position !== null);
+  const allEnemyPositioned = state.enemySquads.filter((s) => s.count > 0).every((s) => s.position !== null);
+
+  return allPlayerPositioned && allEnemyPositioned;
 }
 
 /**
@@ -220,7 +188,8 @@ export function beginTurn(state: CombatState): boolean {
     const alreadyDrawn = state.lastCardDrawTurn === state.turn && state.lastCardDrawSide === state.activeSide;
 
     if (!alreadyDrawn) {
-      drawCombatCard(unifiedDeck);
+      const result = drawCombatCard(unifiedDeck);
+      state.lastCardDrawResult = result;
       state.lastCardDrawTurn = state.turn;
       state.lastCardDrawSide = state.activeSide;
     }
@@ -266,17 +235,128 @@ export function spendMana(
 }
 
 /**
- * Checks if the combat deployment state is currently valid for a specific side.
+ * Helper to check if a specific squad/unit type is available for deployment.
+ *
+ * Rules:
+ * - Matching squad must exist and have count > 0.
+ * - If unified card state exists, the corresponding CreatureCard must be in creatureBench.
+ * - Fallback: if no unified card state is present, we assume any surviving squad is available.
+ */
+export function isCreatureAvailableForDeployment(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+): boolean {
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((s) => s.unitTypeId === unitTypeId);
+  if (!squad || squad.count <= 0) {
+    return false;
+  }
+
+  const unifiedDeck = side === 'player' ? state.playerCombatDeck : state.enemyCombatDeck;
+  if (!unifiedDeck) {
+    // Transitional fallback for legacy tests
+    return true;
+  }
+
+  return unifiedDeck.creatureBench.some((c) => c.unitTypeId === unitTypeId);
+}
+
+/**
+ * Checks if the combat deployment structure is currently valid.
+ * This is an intermediate editing structural check. It does NOT enforce final
+ * confirmation rules (like minimum deployed squads or lane coverage), allowing
+ * players to temporarily have zero or partial deployments while editing.
+ *
  * Validation conditions:
- * 1. The overall deployment structures must be valid (isDeploymentValid).
- * 2. The side must cover as many distinct surviving opponent-occupied lanes as its
- *    number of surviving squads permits: covered opponent lanes >= min(surviving friendly squads, opponent occupied columns).
+ * 1. Any positioned friendly squad must be surviving, have an available Creature card,
+ *    and be in their correct deployment zone.
+ * 2. No two positioned squads may occupy the same cell.
+ * 3. Dead squads (count === 0) must have position === null.
+ * 4. Faction uniqueness invariants (no duplicate unit types on either side).
+ */
+export function isDeploymentStructureValid(state: CombatState): boolean {
+  const activePlayerSquads = state.playerSquads.filter((s) => s.count > 0);
+  const activeEnemySquads = state.enemySquads.filter((s) => s.count > 0);
+
+  // 1. Verify placed friendly squads are in their correct zones and available
+  for (const squad of activePlayerSquads) {
+    if (squad.position !== null) {
+      if (!isPlayerDeploymentPosition(squad.position)) {
+        return false;
+      }
+      if (!isCreatureAvailableForDeployment(state, 'player', squad.unitTypeId)) {
+        return false;
+      }
+    }
+  }
+
+  for (const squad of activeEnemySquads) {
+    if (squad.position !== null) {
+      if (!isEnemyDeploymentPosition(squad.position)) {
+        return false;
+      }
+      if (!isCreatureAvailableForDeployment(state, 'enemy', squad.unitTypeId)) {
+        return false;
+      }
+    }
+  }
+
+  // 2. Verify no duplicate occupancy across all positioned active squads
+  const positionedSquads = [...activePlayerSquads, ...activeEnemySquads].filter((s) => s.position !== null);
+  const occupied = new Set<string>();
+  for (const squad of positionedSquads) {
+    const key = `${squad.position!.column},${squad.position!.row}`;
+    if (occupied.has(key)) {
+      return false;
+    }
+    occupied.add(key);
+  }
+
+  // 3. Verify no duplicate unit types on either side
+  if (
+    hasDuplicateUnitTypes(activePlayerSquads) ||
+    hasDuplicateUnitTypes(activeEnemySquads)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Checks if the combat deployment state is currently valid for a specific side's final confirmation.
+ * Validation conditions:
+ * 1. The overall deployment structures must satisfy isDeploymentStructureValid.
+ * 2. Minimum Deployed Rule: If at least one surviving available Creature card exists,
+ *    at least one must be deployed (deployed count >= 1). If none exist, 0 is allowed.
+ * 3. Lane coverage: The side must cover as many distinct surviving opponent-occupied lanes as its
+ *    number of surviving DEPLOYED friendly squads permits: covered opponent lanes >= min(surviving deployed friendly squads, opponent occupied columns).
  */
 export function isSideDeploymentValid(
   state: CombatState,
   side: CombatSide,
 ): boolean {
-  if (!isDeploymentValid(state)) {
+  if (!isDeploymentStructureValid(state)) {
+    return false;
+  }
+
+  // Minimum deployment check
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const unifiedDeck = side === 'player' ? state.playerCombatDeck : state.enemyCombatDeck;
+
+  if (!unifiedDeck) {
+    // Legacy fallback: every surviving friendly squad must have a non-null position
+    const allPositioned = squads.filter((s) => s.count > 0).every((s) => s.position !== null);
+    if (!allPositioned) {
+      return false;
+    }
+  }
+
+  const survivingAvailable = squads.filter((s) => isCreatureAvailableForDeployment(state, side, s.unitTypeId));
+  const deployed = squads.filter((s) => s.count > 0 && s.position !== null);
+
+  if (survivingAvailable.length > 0 && deployed.length === 0) {
     return false;
   }
 
@@ -284,6 +364,58 @@ export function isSideDeploymentValid(
   const covered = getCoveredOpponentColumns(state, side);
 
   return covered.length >= required;
+}
+
+/**
+ * Checks if a deployed squad can be returned to the bench.
+ */
+export function canUndeploySquad(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+): boolean {
+  if (state.phase !== 'DEPLOYMENT' || side !== state.activeSide) {
+    return false;
+  }
+
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((s) => s.unitTypeId === unitTypeId);
+  if (!squad) {
+    return false;
+  }
+
+  if (squad.count <= 0) {
+    return false;
+  }
+
+  if (!isCreatureAvailableForDeployment(state, side, unitTypeId)) {
+    return false;
+  }
+
+  if (squad.position === null) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Returns a currently deployed squad back to the bench.
+ */
+export function undeploySquad(
+  state: CombatState,
+  side: CombatSide,
+  unitTypeId: string,
+): boolean {
+  if (!canUndeploySquad(state, side, unitTypeId)) {
+    return false;
+  }
+
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squad = squads.find((s) => s.unitTypeId === unitTypeId)!;
+  squad.position = null;
+
+  return true;
 }
 
 /**
@@ -317,11 +449,21 @@ export function canConfirmAttack(state: CombatState): boolean {
   const player = state.activeSide === 'player';
   const squads = player ? state.playerSquads : state.enemySquads;
   const selections = player ? state.selectedPlayerAbilities : state.selectedEnemyAbilities;
-  return squads.filter((squad) => squad.count > 0).every((squad) => {
+
+  const unifiedDeck = player ? state.playerCombatDeck : state.enemyCombatDeck;
+  if (!unifiedDeck) {
+    // Legacy fallback: every surviving friendly squad must have a non-null position
+    const hasUnpositioned = squads.filter((s) => s.count > 0).some((s) => s.position === null);
+    if (hasUnpositioned) {
+      return false;
+    }
+  }
+
+  return squads.filter((squad) => squad.count > 0 && squad.position !== null).every((squad) => {
     const abilityId = selections[squad.unitTypeId];
-    const validPosition = squad.position !== null && (player
-      ? isPlayerDeploymentPosition(squad.position)
-      : isEnemyDeploymentPosition(squad.position));
+    const validPosition = player
+      ? isPlayerDeploymentPosition(squad.position!)
+      : isEnemyDeploymentPosition(squad.position!);
     const allowedAbilities = getEffectiveAbilitiesForUnitType(state, player ? 'player' : 'enemy', squad.unitTypeId);
     return validPosition && abilityId !== undefined &&
       ABILITY_REGISTRY.has(abilityId) && allowedAbilities.includes(abilityId);
@@ -451,10 +593,10 @@ export function getRequiredCoverageCount(
   side: CombatSide,
 ): number {
   const squads = side === 'player' ? state.playerSquads : state.enemySquads;
-  const survivingFriendlies = squads.filter((s) => s.count > 0);
+  const survivingDeployedFriendlies = squads.filter((s) => s.count > 0 && s.position !== null);
   const opponentCols = getOpponentOccupiedColumns(state, side);
 
-  return Math.min(survivingFriendlies.length, opponentCols.length);
+  return Math.min(survivingDeployedFriendlies.length, opponentCols.length);
 }
 
 /**
@@ -493,6 +635,11 @@ export function canRepositionSquad(
 ): boolean {
   // 1. Phase and active side validation
   if (state.phase !== 'DEPLOYMENT' || side !== state.activeSide) {
+    return false;
+  }
+
+  // 1.5 Creature availability validation
+  if (!isCreatureAvailableForDeployment(state, side, unitTypeId)) {
     return false;
   }
 
@@ -535,9 +682,14 @@ export function canRepositionSquad(
     return false;
   }
 
-  // 5.5 Lane engagement validation using maximum achievable coverage
+  // 5.5 Lane engagement validation using maximum achievable coverage (using prospective deployed count)
   const otherCovered = getCoveredOpponentColumns(state, side, unitTypeId);
-  const required = getRequiredCoverageCount(state, side);
+  const activeSquads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const currentSquad = activeSquads.find((s) => s.unitTypeId === unitTypeId)!;
+  const currentlyDeployedCount = activeSquads.filter((s) => s.count > 0 && s.position !== null).length;
+  const prospectiveDeployedCount = currentlyDeployedCount + (currentSquad.position === null ? 1 : 0);
+  const opponentCols = getOpponentOccupiedColumns(state, side);
+  const required = Math.min(prospectiveDeployedCount, opponentCols.length);
 
   if (otherCovered.length < required) {
     const uncoveredByOthers = getUncoveredOpponentColumns(state, side, unitTypeId);
@@ -606,6 +758,12 @@ export function canSwapSquads(
     return false;
   }
 
+  // Verify both participants are available for deployment
+  if (!isCreatureAvailableForDeployment(state, side, firstUnitTypeId) ||
+      !isCreatureAvailableForDeployment(state, side, secondUnitTypeId)) {
+    return false;
+  }
+
   // Construct a prospective swapped state
   const tempState = structuredClone(state);
   const tempSquads = side === 'player' ? tempState.playerSquads : tempState.enemySquads;
@@ -634,7 +792,19 @@ export function canSwapSquads(
     }
   }
 
-  // 2. Verify no duplicate occupancy across all positioned active squads
+  // 2.5 Verify positioned squads are available for deployment
+  for (const squad of activePlayerSquads) {
+    if (squad.position !== null && !isCreatureAvailableForDeployment(state, 'player', squad.unitTypeId)) {
+      return false;
+    }
+  }
+  for (const squad of activeEnemySquads) {
+    if (squad.position !== null && !isCreatureAvailableForDeployment(state, 'enemy', squad.unitTypeId)) {
+      return false;
+    }
+  }
+
+  // 3. Verify no duplicate occupancy across all positioned active squads
   const occupied = new Set<string>();
   for (const squad of [...activePlayerSquads, ...activeEnemySquads]) {
     if (squad.position !== null) {
@@ -646,7 +816,7 @@ export function canSwapSquads(
     }
   }
 
-  // 3. Verify no duplicate unit types on either side
+  // 4. Verify no duplicate unit types on either side
   if (
     hasDuplicateUnitTypes(activePlayerSquads) ||
     hasDuplicateUnitTypes(activeEnemySquads)
@@ -654,7 +824,7 @@ export function canSwapSquads(
     return false;
   }
 
-  // 4. Validate lane coverage if the board is fully deployed
+  // 5. Validate lane coverage if the board is fully deployed
   const activeSideSquads = side === 'player' ? tempState.playerSquads : tempState.enemySquads;
   const allActiveDeployed = activeSideSquads
     .filter((s) => s.count > 0)
@@ -1362,9 +1532,9 @@ export function executeOpeningDraw(
 
   state.openingDrawCompleted = true;
 
-  // Set the draw tracking so that player turn 1 skips their per-turn mixed card draw
-  state.lastCardDrawTurn = 1;
-  state.lastCardDrawSide = 'player';
+  // Set the draw tracking so that the current active side skips their per-turn mixed card draw on this opening turn
+  state.lastCardDrawTurn = state.turn;
+  state.lastCardDrawSide = state.activeSide;
 
   return true;
 }

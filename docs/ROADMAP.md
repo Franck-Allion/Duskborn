@@ -300,12 +300,12 @@ This completed work remains valid as migration input for the unified card deck.
 
 The player is no longer required to deploy every Creature card available on the bench.
 
-- [ ] Allow Confirm Deployment with creatures intentionally left on bench
-- [ ] Validate only actually deployed squads for board position/occupancy
-- [ ] Preserve maximum-achievable lane coverage using the subset chosen for deployment
-- [ ] Define MVP minimum deployment requirement (recommended: at least one deployed squad when one is available)
-- [ ] Ensure bench creatures do not attack, block lanes, or count as board casualties
-- [ ] Add tests for intentional bench retention
+- [x] Allow Confirm Deployment with creatures intentionally left on bench
+- [x] Validate only actually deployed squads for board position/occupancy
+- [x] Preserve maximum-achievable lane coverage using the subset chosen for deployment
+- [x] Define MVP minimum deployment requirement (recommended: at least one deployed squad when one is available)
+- [x] Ensure bench creatures do not attack, block lanes, or count as board casualties
+- [x] Add tests for intentional bench retention
 
 ---
 
@@ -553,7 +553,7 @@ MAX_CREATURE_BENCH = 5
 
 - [x] Creature draw enters Creature bench
 - [x] Bench persists across player turns in combat
-- [ ] Player is never forced to deploy all bench creatures
+- [x] Player is never forced to deploy all bench creatures
 - [x] Bench cannot exceed configured limit
 - [x] Full-bench draw burns/discards new Creature card with explicit domain feedback
 - [x] Bench Creature maps to exactly one unit type/squad identity
@@ -561,9 +561,9 @@ MAX_CREATURE_BENCH = 5
 
 ### Player agency
 
-- [ ] Player may end deployment with Creature cards left on bench
-- [ ] Player may Confirm Attack with playable spells still in hand
-- [ ] Unused cards remain available on later turns unless explicitly removed
+- [x] Player may end deployment with Creature cards left on bench
+- [x] Player may Confirm Attack with playable spells still in hand
+- [x] Unused cards remain available on later turns unless explicitly removed
 
 ---
 
