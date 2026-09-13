@@ -24,7 +24,8 @@ export interface CardViewConfig {
   count?: number;
   isDeployed?: boolean;
   attack?: number;
-  hp?: number;
+  currentHp?: number;
+  maxHp?: number;
   level?: number;
 }
 
@@ -356,9 +357,13 @@ export class CardView extends Phaser.GameObjects.Container {
       this.hpBadgeBg.strokeCircle(w * 0.36, h * 0.36, 11);
       this.add(this.hpBadgeBg);
 
-      this.hpBadgeText = this.scene.add.text(w * 0.36, h * 0.36, String(this.config.hp ?? 0), {
+      const cur = this.config.currentHp ?? this.config.maxHp ?? 0;
+      const mx = this.config.maxHp ?? 0;
+      const hpTextStr = `${cur}/${mx}`;
+
+      this.hpBadgeText = this.scene.add.text(w * 0.36, h * 0.36, hpTextStr, {
         fontFamily: 'Georgia, serif',
-        fontSize: '11px',
+        fontSize: '9px',
         color: '#ffffff',
         fontStyle: 'bold',
       }).setOrigin(0.5).setResolution(badgeFontRes);
@@ -436,7 +441,8 @@ export class CardView extends Phaser.GameObjects.Container {
     count?: number;
     description?: string;
     isDeployed?: boolean;
-    hp?: number;
+    currentHp?: number;
+    maxHp?: number;
     attack?: number;
     level?: number;
   }): void {
@@ -446,9 +452,13 @@ export class CardView extends Phaser.GameObjects.Container {
       }
     }
 
-    if (dynamic.hp !== undefined) {
+    if (dynamic.currentHp !== undefined || dynamic.maxHp !== undefined) {
+      if (dynamic.currentHp !== undefined) this.config.currentHp = dynamic.currentHp;
+      if (dynamic.maxHp !== undefined) this.config.maxHp = dynamic.maxHp;
       if (this.hpBadgeText) {
-        this.hpBadgeText.setText(String(dynamic.hp));
+        const cur = this.config.currentHp ?? this.config.maxHp ?? 0;
+        const mx = this.config.maxHp ?? 0;
+        this.hpBadgeText.setText(`${cur}/${mx}`);
       }
     }
 

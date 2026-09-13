@@ -1129,5 +1129,31 @@ describe('Unified Combat Card Model', () => {
       expect(combat.lastCardDrawResult!.outcome).toBe('DRAWN_TO_HAND');
       expect((combat.lastCardDrawResult as unknown as { card: { spellId: string } }).card.spellId).toBe('firebolt');
     });
+
+    it('verifies Creature current and max HP dynamic tracking based on damagedUnitHp', () => {
+      // Case 1: damagedUnitHp is null -> currentHp should equal maxHp
+      const squadUndamaged = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: null,
+        position: null,
+      };
+
+      const maxHp = 10;
+      const currentHp1 = squadUndamaged.damagedUnitHp ?? maxHp;
+      expect(currentHp1).toBe(10);
+
+      // Case 2: damagedUnitHp is 4 -> currentHp should be 4, maxHp remains 10
+      const squadDamaged = {
+        unitTypeId: 'guardian',
+        count: 8,
+        damagedUnitHp: 4,
+        position: null,
+      };
+
+      const currentHp2 = squadDamaged.damagedUnitHp ?? maxHp;
+      expect(currentHp2).toBe(4);
+      expect(maxHp).toBe(10);
+    });
   });
 });

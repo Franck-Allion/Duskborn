@@ -121,7 +121,8 @@ export class CreatureBenchView {
 
       // Resolve combat stats from authoritative domain/content
       const attack = unitDef?.baseDamage ?? 0;
-      const hp = unitDef?.hpPerUnit ?? 0;
+      const maxHp = unitDef?.hpPerUnit ?? 0;
+      const currentHp = squad?.damagedUnitHp ?? maxHp;
       const level = runState?.unitTypeProgression?.[creatureCard.unitTypeId]?.level ?? 1;
 
       // Cleaned description text showing active abilities instead of redundant deployment statuses
@@ -148,7 +149,8 @@ export class CreatureBenchView {
           description: abilitiesList,
           count,
           attack,
-          hp,
+          currentHp,
+          maxHp,
           level,
           isDeployed,
         });
@@ -181,7 +183,8 @@ export class CreatureBenchView {
           description: abilitiesList,
           isDeployed,
           attack,
-          hp,
+          currentHp,
+          maxHp,
           level,
         });
       }
