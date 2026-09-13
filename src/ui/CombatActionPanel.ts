@@ -6,9 +6,11 @@ import {
   tryUseAbility,
   resolveActiveSideAttack,
   endTurn,
+  applyCombatResultToRunState,
   type CombatState,
 } from '../game/combat/CombatState';
-import { runEnemyTurn } from '../game/combat/EnemyTurnAI';
+import { orchestrateAutomaticPhases } from '../game/combat/EnemyTurnAI';
+import type { RunState } from '../game/core/RunState';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
 import { SPELL_REGISTRY } from '../game/content/spells';
 import { UNIT_REGISTRY } from '../game/content/unitTypes';
@@ -116,7 +118,31 @@ export class CombatActionPanel {
         canConfirmAttack(state) ? 0xea580c : 0x334155,
       );
     } else {
-      if (state.activeSide === 'player') {
+      if (state.phase === 'VICTORY') {
+        this.text(y, 'VICTORY!\n\nAll Duskborn threats in this lane are vanquished.', '#4ade80');
+        this.button(
+          470,
+          'Return to Map',
+          () => {
+            const runState = (this.scene as unknown as { runState: RunState }).runState;
+            applyCombatResultToRunState(state, runState);
+            this.scene.scene.start('map');
+          },
+          0x10b981,
+        );
+      } else if (state.phase === 'DEFEAT') {
+        this.text(y, 'DEFEAT!\n\nYour hero has fallen in battle.', '#f87171');
+        this.button(
+          470,
+          'Return to Map',
+          () => {
+            const runState = (this.scene as unknown as { runState: RunState }).runState;
+            applyCombatResultToRunState(state, runState);
+            this.scene.scene.start('map');
+          },
+          0xef4444,
+        );
+      } else if (state.activeSide === 'player') {
         if (state.phase === 'RESOLUTION') {
           this.button(
             470,
@@ -134,6 +160,8 @@ export class CombatActionPanel {
             'End Turn',
             () => {
               if (endTurn(state)) {
+                // Automatically orchestrate enemy's turn until control is handed back to player (or combat ends)
+                orchestrateAutomaticPhases(state);
                 this.refresh();
               }
             },
@@ -147,36 +175,12 @@ export class CombatActionPanel {
           );
         }
       } else {
-        // Enemy Turn
-        if (state.phase === 'DEPLOYMENT') {
-          this.button(
-            470,
-            'Run Duskborn Turn',
-            () => {
-              if (runEnemyTurn(state)) {
-                this.refresh();
-              }
-            },
-            0xd97706, // amber-600
-          );
-        } else if (state.phase === 'TURN_END') {
-          this.button(
-            470,
-            'Next Turn',
-            () => {
-              if (endTurn(state)) {
-                this.refresh();
-              }
-            },
-            0x10b981, // green-500
-          );
-        } else {
-          this.text(
-            y,
-            `Duskborn Phase: ${state.phase}`,
-            '#94a3b8',
-          );
-        }
+        // Enemy Turn (only visible if paused or for visual feedback)
+        this.text(
+          y,
+          `Duskborn Turn (Phase: ${state.phase})...`,
+          '#d97706',
+        );
       }
     }
   }

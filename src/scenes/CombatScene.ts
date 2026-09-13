@@ -60,15 +60,22 @@ export class CombatScene extends Phaser.Scene {
 
     // Initialize the mutable CombatState for this battle with unpositioned player squads and deterministically deployed enemy squads
     this.combatState = {
-      playerSquads: [
-        {
-          unitTypeId: 'guardian',
-          count: 8,
-          damagedUnitHp: null,
-          position: null,
-        },
-        { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
-      ],
+      playerSquads: this.runState.playerSquads
+        ? this.runState.playerSquads.map((s) => ({
+            unitTypeId: s.unitTypeId,
+            count: s.count,
+            damagedUnitHp: s.damagedUnitHp,
+            position: null,
+          }))
+        : [
+            {
+              unitTypeId: 'guardian',
+              count: 8,
+              damagedUnitHp: null,
+              position: null,
+            },
+            { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
+          ],
       enemySquads: deployEnemySquads([
         {
           unitTypeId: 'duskborn-brute',

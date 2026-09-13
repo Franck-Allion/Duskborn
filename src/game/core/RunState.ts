@@ -1,3 +1,5 @@
+import type { Squad } from '../combat/Squad';
+
 export type RunPhase = 'exploration' | 'combat';
 
 export interface RunState {
@@ -10,6 +12,7 @@ export interface RunState {
     mana: number;
     army: number;
   };
+  playerSquads?: Squad[];
 }
 
 /**

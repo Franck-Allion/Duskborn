@@ -10,6 +10,7 @@ import {
 import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
 import type { UnitType } from '../content/UnitType';
+import type { RunState } from '../core/RunState';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
 import { ABILITY_REGISTRY } from '../content/abilities';
@@ -655,6 +656,63 @@ export function resolvePlayedSpells(state: CombatState, side: CombatSide): void 
   }
 }
 
+export type CombatResult = 'ONGOING' | 'VICTORY' | 'DEFEAT';
+
+/**
+ * Pure TypeScript combat-result evaluator.
+ * Decided ONLY by hero HP. Squad count must NOT determine the result.
+ */
+export function getCombatResult(state: CombatState): CombatResult {
+  if (state.enemyHeroHp <= 0) {
+    return 'VICTORY';
+  }
+  if (state.playerHeroHp <= 0) {
+    return 'DEFEAT';
+  }
+  return 'ONGOING';
+}
+
+/**
+ * Evaluates getCombatResult and updates state.phase to VICTORY or DEFEAT if ended.
+ * Returns true if combat ended, or false if ongoing.
+ */
+export function updateCombatResultPhase(state: CombatState): boolean {
+  const result = getCombatResult(state);
+  if (result === 'VICTORY') {
+    state.phase = 'VICTORY';
+    return true;
+  }
+  if (result === 'DEFEAT') {
+    state.phase = 'DEFEAT';
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Preserves the surviving player squad counts and partially damaged units
+ * in the RunState roster on victory, and changes run phase back to exploration.
+ */
+export function applyCombatResultToRunState(
+  state: CombatState,
+  runState: RunState,
+): void {
+  // Map surviving squads back to runState, resetting positions to null
+  runState.playerSquads = state.playerSquads.map((s) => ({
+    unitTypeId: s.unitTypeId,
+    count: s.count,
+    damagedUnitHp: s.damagedUnitHp,
+    position: null,
+  }));
+
+  // Update generic army count resource based on survivors
+  const totalArmy = state.playerSquads.reduce((sum, s) => sum + s.count, 0);
+  runState.resources.army = totalArmy;
+
+  // Change run phase back to exploration
+  runState.phase = 'exploration';
+}
+
 /**
  * Resolves all attacks for the active side's surviving positioned squads.
  * Rules:
@@ -694,6 +752,11 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
 
   // Resolve active side's played spells first
   resolvePlayedSpells(state, side);
+
+  // Check if spell damage ended combat
+  if (updateCombatResultPhase(state)) {
+    return true;
+  }
 
   // Calculate total Battle Cry bonus
   let battleCryBonus = 0;
@@ -773,6 +836,11 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
       const targetSquad = target.squad;
       const targetDef = UNIT_REGISTRY.get(targetSquad.unitTypeId)!;
       applyDamageToSquad(targetSquad, targetDef, totalDamage);
+    }
+
+    // Check if this attack ended combat
+    if (updateCombatResultPhase(state)) {
+      return true;
     }
   }
 

@@ -7,6 +7,8 @@ import {
   confirmDeployment,
   confirmAttack,
   resolveActiveSideAttack,
+  endTurn,
+  getCombatResult,
 } from './CombatState';
 import {
   GRID_COLUMNS,
@@ -135,4 +137,58 @@ export function runEnemyTurn(state: CombatState): boolean {
   }
 
   return true;
+}
+
+/**
+ * Examines the current combat state and automatically advances non-interactive phases.
+ * - If activeSide is 'enemy' and phase is 'DEPLOYMENT': automatically runs runEnemyTurn(state).
+ * - If activeSide is 'enemy' and phase is 'TURN_END': automatically runs endTurn(state) to hand back to the player.
+ * - If activeSide is 'player' and phase is 'TURN_END': automatically runs endTurn(state) to hand off to the enemy.
+ * 
+ * Returns true if any state modification occurred, or false if no automatic phase was applicable.
+ */
+export function advanceAutomaticCombatPhases(state: CombatState): boolean {
+  const result = getCombatResult(state);
+  if (result !== 'ONGOING') {
+    // If combat has ended, no automatic transitions are allowed!
+    // Make sure we update the phase to match the result
+    if (result === 'VICTORY' && state.phase !== 'VICTORY') {
+      state.phase = 'VICTORY';
+      return true;
+    }
+    if (result === 'DEFEAT' && state.phase !== 'DEFEAT') {
+      state.phase = 'DEFEAT';
+      return true;
+    }
+    return false;
+  }
+
+  if (state.activeSide === 'enemy') {
+    if (state.phase === 'DEPLOYMENT') {
+      return runEnemyTurn(state);
+    }
+    if (state.phase === 'TURN_END') {
+      return endTurn(state);
+    }
+  } else if (state.activeSide === 'player') {
+    if (state.phase === 'TURN_END') {
+      return endTurn(state);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Runs a continuous loop advancing all consecutive automatic non-interactive phases
+ * in a single synchronous call.
+ * 
+ * Returns true if any transition was executed.
+ */
+export function orchestrateAutomaticPhases(state: CombatState): boolean {
+  let changed = false;
+  while (advanceAutomaticCombatPhases(state)) {
+    changed = true;
+  }
+  return changed;
 }
