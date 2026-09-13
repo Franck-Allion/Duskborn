@@ -2,17 +2,25 @@
 
 ## Working Rule
 
-Implement one unchecked item at a time unless explicitly requested otherwise.
+Implement coherent batches rather than blindly implementing one checkbox at a time.
 
-After each item:
+For each batch:
 
 ```text
+Inspect current working tree and latest pushed commit
+Audit the previous batch for regressions
+Implement only the current coherent slice
+Run targeted tests
+Run full tests when relevant
 Run TypeScript validation
-Run tests
-Launch / manually verify when relevant
-Update documentation if behavior changed
+Run ESLint
+Run build
+Launch / manually verify gameplay when relevant
+Update only roadmap items actually completed
 Commit the change
 ```
+
+Combat-domain rules should remain pure TypeScript whenever practical. Phaser owns presentation, input, animation, sound, camera effects, and visual sequencing; it must not become the authoritative source of gameplay rules.
 
 ---
 
@@ -27,10 +35,6 @@ Commit the change
 - [x] Confirm TypeScript validation works
 - [x] Confirm one sample test works
 
-Success condition:
-
-> The project launches locally and the development workflow is stable.
-
 ---
 
 # 0.1 Core Map
@@ -40,10 +44,6 @@ Success condition:
 - [x] Render the 6x6 map in Phaser
 - [x] Add a player logical position
 - [x] Render player position
-
-Success condition:
-
-> The player can see a grid and their position.
 
 ---
 
@@ -55,10 +55,6 @@ Success condition:
 - [x] Add movement tests
 - [x] Connect map clicks to movement
 - [x] Visually update player position
-
-Success condition:
-
-> The player can click an adjacent tile and move exactly one tile.
 
 ---
 
@@ -74,17 +70,9 @@ Success condition:
 - [x] Add End Day button
 - [x] Add tests for action consumption
 
-Success condition:
-
-> Moving consumes actions and the player understands how many actions remain.
-
 ---
 
 # 0.4 Exploration Resources
-
-The exploration layer provides resources that later support recruitment, spell acquisition, events, and run progression.
-
-Existing resource work remains valid.
 
 - [x] Add Gold to RunState
 - [x] Add Mana to RunState
@@ -99,39 +87,14 @@ Existing resource work remains valid.
 - [ ] Define how the existing Army value coexists with typed combat squads
 - [ ] Add resource tests
 
-### Resource roles
-
-For the MVP:
+Resource roles:
 
 ```text
-Gold
-→ shops
-→ recruits
-→ spells
-→ economy choices
-
-Exploration Mana
-→ magical exploration rewards/events
-→ spell-related economy where useful
-
-Combat Mana
-→ refreshed each combat turn
-→ pays for spells and squad abilities
-
-Army
-→ existing run-level resource
-→ must progressively integrate with typed squad recruitment
+Gold -> shops / recruits / cards / economy choices
+Exploration Mana -> magical exploration rewards/events
+Combat Mana -> refreshed each combat turn, pays for spells and squad abilities
+Army -> legacy run-level resource, progressively migrate toward typed squads
 ```
-
-Do not use the exploration Mana value directly as the refreshed combat Mana pool.
-
-The existing `Army` state must remain compatible while typed recruitment is introduced.
-
-Prefer gradually making the actual player roster of typed squads the authoritative combat-army representation rather than creating a second unrelated army model.
-
-Success condition:
-
-> Exploration provides resources that feed directly into the player's evolving army, spell deck, and run economy.
 
 ---
 
@@ -144,1017 +107,720 @@ Success condition:
 - [x] Introduce combat phase / CombatScene
 - [x] Prevent map actions during combat
 
-Implemented alongside the requested 0.3 End Day step using a pure RunState
-phase and a message panel in MapScene. CONTINUE now opens a minimal CombatScene
-with the same RunState and stops MapScene. No combat resolution yet.
-End Day preserves the day and remaining actions. Zero actions does not end
-exploration automatically; the player must press End Day.
-
-Success condition:
-
-> Every day clearly transitions into mandatory combat.
-
 ---
 
-# 0.6 Tactical Duskborn Combat MVP
+# 0.6 Tactical Duskborn Combat Vertical Slice
 
-The combat system should validate tactical depth without becoming a full tactical RPG.
+The combat milestone is no longer only a rules MVP. It is the vertical slice used to decide whether the core game is fun enough to justify deeper production.
 
-The combat model is based on alternating turns inspired by a simplified card battler.
-
-Core combat principles:
+Core identity:
 
 ```text
-Grid: 6 columns × 4 rows
-
-Enemy zone: 6 × 2
-Player zone: 6 × 2
-
-Each unit type is represented by one indivisible squad.
-
-Example:
-- Guardians ×8
-- Archers ×3
-- Arcanists ×4
-
-A squad cannot be split into multiple groups.
+6 columns x 4 rows
+2 rows per side
+one indivisible squad per unit type
+persistent squads
+position-dependent abilities
+Combat Mana shared by abilities and spells
+unified Creature + Spell combat deck
+visible card draw
+player bench for undeployed Creature cards
+persistent Spell hand
+alternating turns
+readable deterministic resolution
 ```
 
-Combat alternates between the player and the Duskborn.
-
-Each side follows the same high-level turn sequence:
-
-```text
-START TURN
-↓
-Restore Mana to maximum
-↓
-Draw 1 spell
-↓
-DEPLOYMENT PHASE
-- deploy / reposition squads
-- respect lane engagement restrictions
-↓
-ACTION PHASE
-- cast spells
-- select / activate squad abilities
-- spend Mana
-↓
-CONFIRM ATTACK
-↓
-ATTACK RESOLUTION
-- determine squad targets
-- evaluate attacks
-- resolve squad damage
-- resolve direct hero damage through empty lanes
-- remove casualties
-↓
-CHECK COMBAT RESULT
-↓
-END TURN
-↓
-Other side becomes active
-```
-
-There is no free movement during the action or resolution phases.
-
-Squad repositioning happens only during the active side's deployment phase.
-
-Combat continues until one hero reaches 0 HP.
-
-The combat system must remain pure TypeScript whenever practical.
-
-Preferred architecture:
-
-```text
-CombatScene
-    ↓
-CombatSystem
-    ↓
-CombatState
-    ↓
-Turn / Targeting / Ability / Spell systems
-    ↓
-UnitType / Squad / Ability / Spell definitions
-```
-
-Avoid importing the full complexity of games such as Magic: The Gathering.
-
-The MVP should remain deterministic, readable, and fast.
+The visual target is a polished game interface, not a debug UI. Text is allowed only as part of designed game components: framed cards, badges, tooltips, counters, banners, buttons, and HUD panels. Avoid raw monospace/debug labels in the final vertical slice.
 
 ---
 
 ## 0.6.1 Combat Data Model
 
-* [x] Create `UnitType` content definition structure
-* [x] Create `Squad` model
-* [x] Create `CombatPosition`
-* [x] Create `CombatState`
-* [x] Add player hero HP
-* [x] Add enemy hero HP
-* [x] Keep combat models independent from Phaser
-* [x] Add initial combat model tests
-
-### UnitType
-
-A unit type defines permanent/base characteristics.
-
-Example direction:
-
-```ts
-interface UnitTypeDefinition {
-  id: string;
-  name: string;
-  hpPerUnit: number;
-  baseDamage: number;
-  abilities: string[];
-}
-```
-
-Do not store one object per individual soldier.
-
-### Squad
-
-A squad represents all current units of one type.
-
-Example:
-
-```ts
-interface Squad {
-  unitTypeId: string;
-  count: number;
-  damagedUnitHp: number | null;
-  position: CombatPosition | null;
-}
-```
-
-Example:
-
-```text
-Guardians ×8
-```
-
-represents one indivisible combat entity.
-
-If one Guardian has 10 HP:
-
-```text
-Guardians ×8
-=
-80 theoretical total HP
-```
-
-Damage should progressively kill units in the stack.
-
-Example:
-
-```text
-Guardians ×8
-Receive 23 damage
-↓
-2 Guardians die
-1 Guardian remains partially damaged
-↓
-Guardians ×6
-Current damaged Guardian: 7 / 10 HP
-```
-
-Success condition:
-
-> Combat state can represent squads, positions, and hero HP without depending on Phaser.
+- [x] Create `UnitType` content definition structure
+- [x] Create `Squad` model
+- [x] Create `CombatPosition`
+- [x] Create `CombatState`
+- [x] Add player hero HP
+- [x] Add enemy hero HP
+- [x] Keep combat models independent from Phaser
+- [x] Add initial combat model tests
 
 ---
 
 ## 0.6.2 First Unit Types
 
-Create a deliberately small initial roster.
-
 ### Player
-
-* [x] Create Guardian unit type
-* [x] Create Archer unit type
+- [x] Create Guardian unit type
+- [x] Create Archer unit type
 
 ### Duskborn
+- [x] Create Duskborn Brute
+- [x] Create Duskborn Archer or equivalent ranged enemy
 
-* [x] Create Duskborn Brute
-* [x] Create Duskborn Archer or equivalent ranged enemy
-
-Each unit type should initially have:
-
-* [x] HP per unit
-* [x] base damage
-* [x] one basic ability
-* [x] optional simple passive if needed
-
-Avoid complex status effects at this stage.
-
-Example direction:
-
-```text
-Guardian
-- high HP
-- moderate damage
-- defensive identity
-
-Archer
-- lower HP
-- ranged/offensive identity
-
-Duskborn Brute
-- high damage
-- frontline pressure
-
-Duskborn Archer
-- lower HP
-- ranged threat
-```
-
-Success condition:
-
-> The first battle can be composed from 2 player squad types and 2 enemy squad types.
+- [x] HP per unit
+- [x] base damage
+- [x] one basic ability
+- [x] optional simple passive if needed
 
 ---
 
 ## 0.6.3 Combat Grid
 
-* [x] Create pure TypeScript combat grid model
-* [x] Grid size is 6 × 4
-* [x] Define player deployment zone as 6 × 2
-* [x] Define enemy deployment zone as 6 × 2
-* [x] Prevent invalid positions
-* [x] Prevent two squads occupying same cell
-* [x] Add grid tests
-* [x] Render combat grid in CombatScene
+- [x] Create pure TypeScript combat grid model
+- [x] Grid size is 6 x 4
+- [x] Define player deployment zone as 6 x 2
+- [x] Define enemy deployment zone as 6 x 2
+- [x] Prevent invalid positions
+- [x] Prevent two squads occupying same cell
+- [x] Add grid tests
+- [x] Render combat grid in CombatScene
 
-Orientation:
+Canonical rows:
 
 ```text
-DUSKBORN / ENEMY SIDE
-
-Enemy back row (row 0)
-[ ][ ][ ][ ][ ][ ]
-
-Enemy front row (row 1)
-[ ][ ][ ][ ][ ][ ]
-
--------------------
-
-Player front row (row 2)
-[ ][ ][ ][ ][ ][ ]
-
-Player back row (row 3)
-[ ][ ][ ][ ][ ][ ]
-
-PLAYER SIDE
+row 0 = Enemy Back
+row 1 = Enemy Front
+row 2 = Player Front
+row 3 = Player Back
 ```
-
-Success condition:
-
-> The combat screen clearly displays both 6×2 combat zones.
 
 ---
 
 ## 0.6.4 Squad Deployment Foundation
 
-The original deployment implementation remains valid as the foundation for per-turn deployment.
-
-* [x] Allow player squads to be positioned before combat
-* [x] Allow only one squad per unit type
-* [x] Prevent splitting a squad
-* [x] Restrict player placement to player deployment zone
-* [x] Place enemy squads using deterministic initial rules
-* [x] Add Confirm Deployment action
-* [x] Prevent combat from starting before valid deployment
-* [x] Add drag-and-drop deployment interaction
-* [x] Add deployment tests
-
-Existing placement validation, drag-and-drop behavior, occupancy rules, and indivisible-squad rules should be reused by the per-turn deployment system.
-
-Do not create a second placement rules engine.
-
-Success condition:
-
-> The existing deployment system provides a stable reusable foundation for placing and repositioning squads during combat turns.
+- [x] Allow player squads to be positioned before combat
+- [x] Allow only one squad per unit type
+- [x] Prevent splitting a squad
+- [x] Restrict player placement to player deployment zone
+- [x] Place enemy squads using deterministic initial rules
+- [x] Add Confirm Deployment action
+- [x] Prevent combat from starting before valid deployment
+- [x] Add drag-and-drop deployment interaction
+- [x] Add deployment tests
 
 ---
 
 ## 0.6.5 Position Categories
 
-Supported MVP categories:
-
-```text
-FRONT
-BACK
-EDGE
-CENTER
-```
-
-* [x] Detect whether a squad is FRONT or BACK
-* [x] Detect whether a squad is EDGE or CENTER
-* [x] Keep position rules independent from Phaser
-* [x] Add position tests
-
-Canonical depth rules:
-
-```text
-Enemy:
-row 0 = BACK
-row 1 = FRONT
-
-Player:
-row 2 = FRONT
-row 3 = BACK
-```
-
-Horizontal rules:
-
-```text
-columns 0 and 5 = EDGE
-columns 1–4 = CENTER
-```
-
-Abilities may depend on these categories.
-
-Success condition:
-
-> Unit abilities can react to readable positional categories without hard-coding specific coordinates.
+- [x] Detect FRONT / BACK
+- [x] Detect EDGE / CENTER
+- [x] Keep position rules independent from Phaser
+- [x] Add position tests
 
 ---
 
 ## 0.6.6 Lane Targeting
 
-Each column is a combat lane.
-
-* [x] Implement lane detection
-* [x] A squad normally targets the opposing squad in the same column
-* [x] If both enemy rows are occupied in that column, FRONT is targeted first
-* [x] If the opposing lane contains no squad, damage goes directly to enemy hero
-* [x] Add targeting tests
-
-Targeting flow:
-
-```text
-Attacking squad
-↓
-Find surviving opposing squads in same lane
-
-0 squads
-=> opposing hero
-
-1 squad
-=> that squad
-
-2 squads
-=> FRONT squad
-```
-
-Targeting works symmetrically for both sides.
-
-The existing targeting system determines targets.
-
-Actual damage application belongs to attack resolution later.
-
-Success condition:
-
-> Placement creates meaningful offensive and defensive lanes.
+- [x] Implement lane detection
+- [x] Same-column targeting
+- [x] FRONT priority when both enemy rows occupied
+- [x] Empty opposing lane damages hero
+- [x] Add targeting tests
 
 ---
 
 ## 0.6.7 Alternating Turn System
 
-Replace the previous simultaneous round/intention model with explicit alternating turns.
-
-Add a combat turn state such as:
-
-```ts
-type CombatSide = 'player' | 'enemy';
-
-type CombatPhase =
-  | 'TURN_START'
-  | 'DEPLOYMENT'
-  | 'ACTION'
-  | 'RESOLUTION'
-  | 'TURN_END'
-  | 'VICTORY'
-  | 'DEFEAT';
-```
-
-Exact naming may follow existing project conventions.
-
-* [x] Add active side to `CombatState`
-* [x] Add combat turn number to `CombatState`
-* [x] Add explicit combat phase to `CombatState`
-* [x] Start combat with the player as active side
-* [x] Implement `TURN_START`
-* [x] Transition `TURN_START → DEPLOYMENT`
-* [x] Transition `DEPLOYMENT → ACTION`
-* [x] Add Confirm Attack transition from `ACTION → RESOLUTION`
-* [x] Transition `RESOLUTION → TURN_END`
-* [x] Switch active side during `TURN_END`
-* [x] Start the next side's turn
-* [x] Prevent actions that are invalid for the current phase
-* [x] Add turn-state tests
-
-Do not implement enemy intentions.
-
-The active side fully resolves its turn before the other side acts.
-
-Success condition:
-
-> Player turn → enemy turn → player turn can repeat deterministically through pure combat state.
+- [x] Add active side
+- [x] Add combat turn number
+- [x] Add explicit combat phase
+- [x] Start with player active
+- [x] Implement `TURN_START`
+- [x] `TURN_START -> DEPLOYMENT`
+- [x] `DEPLOYMENT -> ACTION`
+- [x] Confirm Attack `ACTION -> RESOLUTION`
+- [x] `RESOLUTION -> TURN_END`
+- [x] Switch active side
+- [x] Start next side turn
+- [x] Prevent phase-invalid actions
+- [x] Add turn-state tests
 
 ---
 
 ## 0.6.8 Combat Mana
 
-Combat Mana is refreshed each turn.
-
-Represent Mana explicitly as:
-
-```ts
-interface CombatMana {
-  current: number;
-  max: number;
-}
-```
-
-or equivalent.
-
-Both sides use the same Mana rules.
-
-* [x] Add player combat Mana
-* [x] Add enemy combat Mana
-* [x] Restore active side Mana to maximum at `TURN_START`
-* [x] Allow actions to spend current Mana
-* [x] Prevent Mana from dropping below 0
-* [x] Prevent actions when Mana cost cannot be paid
-* [x] Ensure unused current Mana does not accumulate beyond max
-* [x] Clarify/separate combat Mana from existing persistent `RunState` Mana semantics
-* [x] Add combat Mana tests
-
-The existing exploration `Mana` resource must not accidentally become both a persistent currency and an automatically refreshed combat resource.
-
-If both concepts remain useful, represent them separately.
-
-Success condition:
-
-> Every turn starts with a predictable Mana budget that must be allocated between spells and squad abilities.
+- [x] Add player combat Mana
+- [x] Add enemy combat Mana
+- [x] Restore active side Mana at `TURN_START`
+- [x] Spend current Mana
+- [x] Prevent negative Mana
+- [x] Reject actions with insufficient Mana
+- [x] Prevent accumulation above max
+- [x] Separate Combat Mana from RunState Mana
+- [x] Add combat Mana tests
 
 ---
 
-## 0.6.9 Spell Deck and Draw
+## 0.6.9 Legacy Spell Deck Foundation
 
-Introduce a deliberately small spell-card layer.
+This completed work remains valid as migration input for the unified card deck.
 
-Each side may have:
+- [x] Create `SpellDefinition`
+- [x] Create pure TypeScript spell deck state
+- [x] Create initial player spell deck
+- [x] Create initial Duskborn spell deck or deterministic equivalent
+- [x] Draw 1 spell at `TURN_START`
+- [x] Put played spells into discard
+- [x] Define empty draw-pile behavior
+- [x] Keep spell/deck logic independent from Phaser
+- [x] Add spell draw/deck tests
 
-```text
-Draw pile
-Hand
-Discard pile
-```
-
-Keep the MVP minimal.
-
-* [x] Create `SpellDefinition`
-* [x] Create pure TypeScript spell deck state
-* [x] Create initial player spell deck
-* [x] Create initial Duskborn spell deck or deterministic equivalent
-* [x] Draw 1 spell for the active side at `TURN_START`
-* [x] Put played spells into discard
-* [x] Define deterministic behavior when draw pile is empty
-* [x] Keep spell/deck logic independent from Phaser
-* [x] Add spell draw/deck tests
-
-Avoid for the MVP:
-
-* rarity systems;
-* booster mechanics;
-* interrupts;
-* a Magic-style stack;
-* reactions during the opponent turn;
-* complex card timing rules.
-
-Success condition:
-
-> Each turn gives the active side one new tactical spell option without turning combat into a full collectible card game.
+> The spell-only deck is now legacy architecture. Preserve useful code and tests, but migrate the gameplay model to the unified Creature + Spell deck below.
 
 ---
 
 ## 0.6.10 Per-Turn Squad Deployment
 
-Adapt the completed deployment foundation so deployment happens during every active turn.
+- [x] Reuse deployment APIs for per-turn repositioning
+- [x] Deployment only during active side `DEPLOYMENT`
+- [x] Reposition surviving player squads each player turn
+- [x] Reposition surviving enemy squads each enemy turn
+- [x] Preserve count and partial HP while repositioning
+- [x] Apply lane engagement restriction
+- [x] Prevent illegal empty-lane placement while required lanes remain uncovered
+- [x] Preserve occupancy and deployment-zone validation
+- [x] Prevent deployment changes during `ACTION`
+- [x] Adapt drag-and-drop to per-turn deployment
+- [x] Replace one-time deployment confirmation semantics
+- [x] Add per-turn deployment tests
 
-Existing squad positions persist between turns unless explicitly repositioned.
+### Deployment ergonomics already completed
 
-During `DEPLOYMENT`, the active side may reposition its surviving squads within its own 6×2 zone.
+- [x] Deployed <-> deployed swap
+- [x] Atomic swap
+- [x] Prospective validation
+- [x] Reject invalid swap without partial mutation
+- [x] Add swap tests
+- [x] Allow undeployed squad to replace a deployed friendly squad
+- [x] Replaced squad returns to `position = null`
+- [x] Keep null/position exchange atomic
+- [x] Keep final deployment confirmation strict
 
-### Lane engagement restriction
+### Revised deployment rule for the new bench model
 
-During deployment, a side must cover as many distinct surviving opponent-occupied lanes as its number of surviving squads permits.
+The player is no longer required to deploy every Creature card available on the bench.
 
-Required covered lanes =
-min(surviving friendly squads, distinct surviving opponent-occupied lanes).
-
-Once that required coverage is reached, additional squads may occupy other legal lanes.
-
-Example:
-
-```text
-Enemy:
-lane 1 = Brute
-lane 4 = Archer
-
-Player legal deployment columns:
-lane 1
-lane 4
-```
-
-The player may choose FRONT/BACK within those legal columns according to normal placement rules.
-
-A squad already occupying a lane is not automatically moved when the opponent later leaves that lane.
-
-Therefore a lane may become empty after an opponent repositions, exposing the opposing hero to direct damage.
-
-* [x] Reuse existing deployment APIs for per-turn repositioning
-* [x] Allow deployment only during the active side's `DEPLOYMENT` phase
-* [x] Allow surviving player squads to be repositioned each player turn
-* [x] Allow surviving enemy squads to be repositioned each enemy turn
-* [x] Preserve squad count and partial HP while repositioning
-* [x] Apply lane engagement restriction
-* [x] Prevent deployment into an empty column while opposing squads occupy other columns
-* [x] Preserve existing occupancy and deployment-zone validation
-* [x] Prevent deployment changes after entering `ACTION`
-* [x] Adapt drag-and-drop to player per-turn deployment
-* [x] Replace/adapt one-time `deploymentConfirmed` semantics to the turn phase model
-* [x] Add per-turn deployment tests
-
-Do not duplicate the existing placement engine.
-
-Success condition:
-
-> Placement becomes a tactical decision every turn while squads remain constrained by the enemy battle line.
+- [ ] Allow Confirm Deployment with creatures intentionally left on bench
+- [ ] Validate only actually deployed squads for board position/occupancy
+- [ ] Preserve maximum-achievable lane coverage using the subset chosen for deployment
+- [ ] Define MVP minimum deployment requirement (recommended: at least one deployed squad when one is available)
+- [ ] Ensure bench creatures do not attack, block lanes, or count as board casualties
+- [ ] Add tests for intentional bench retention
 
 ---
 
 ## 0.6.11 Squad Abilities and Spells
 
-Spells and squad abilities share the active side's combat Mana budget.
-
-### Squad abilities
-
-Each surviving squad may select at most one attack ability for the turn.
-
-Basic abilities should remain simple.
-
-Example:
-
-```text
-Guardian
-
-Strike
-Cost: 0 Mana
-
-Shield Wall
-Cost: 2 Mana
-```
-
-```text
-Archer
-
-Shot
-Cost: 0 Mana
-
-Power Shot
-Cost: 1 Mana
-```
-
-### Spells
-
-Spells come from the active side's hand and may affect:
-
-* squads;
-* lanes;
-* hero HP;
-* Mana;
-* attack values;
-* positioning rules;
-
-but keep first effects simple.
-
-* [x] Create/extend ability content definition structure
-* [x] Give Guardian at least 2 meaningful abilities
-* [x] Give Archer at least 2 meaningful abilities
-* [x] Give each Duskborn type at least 1 usable ability
-* [x] Support Mana ability costs
-* [x] Add at least 3 simple player spells
-* [x] Add a minimal set of Duskborn spells or deterministic equivalents
-* [x] Support Mana spell costs
-* [x] Prevent ability/spell use when Mana is insufficient
-* [x] Spend Mana only on successful legal actions
-* [x] Prevent more than one selected attack ability per squad per turn
-* [x] Allow multiple spells in a turn while Mana permits
-* [x] Add ability/spell tests
-
-Gold is not a combat action cost in this MVP.
-
-Gold remains an exploration/economy resource unless a later design explicitly reintroduces combat spending.
-
-Success condition:
-
-> Mana creates a meaningful choice between squad abilities and spell effects.
+- [x] Create/extend ability content structure
+- [x] Guardian has at least 2 meaningful abilities
+- [x] Archer has at least 2 meaningful abilities
+- [x] Each Duskborn type has at least 1 ability
+- [x] Support Mana ability costs
+- [x] Add at least 3 player spells
+- [x] Add minimal Duskborn spells/equivalents
+- [x] Support Mana spell costs
+- [x] Reject unaffordable ability/spell use
+- [x] Spend Mana only on successful legal actions
+- [x] One selected attack ability per squad/turn
+- [x] Multiple spells allowed while Mana permits
+- [x] Add ability/spell tests
 
 ---
 
 ## 0.6.12 Position-Based Abilities
 
-Use the already completed position-category system.
-
-* [x] Add at least one FRONT-based effect
-* [x] Add at least one BACK-based effect
-* [x] Add at least one EDGE or CENTER-based effect
-* [x] Re-evaluate position effects after legal repositioning
-* [x] Keep these rules data-driven where practical
-* [x] Add position-effect tests
-
-Example:
-
-```text
-Guardian
-Bulwark:
-bonus while FRONT
-```
-
-```text
-Archer
-Marksman:
-bonus while BACK
-```
-
-Avoid excessive positional complexity.
-
-Success condition:
-
-> Per-turn squad repositioning changes the effectiveness of squad abilities.
+- [x] Add FRONT-based effect
+- [x] Add BACK-based effect
+- [x] Add EDGE/CENTER-based effect
+- [x] Re-evaluate after repositioning
+- [x] Keep rules data-driven
+- [x] Add position-effect tests
 
 ---
 
 ## 0.6.13 Action Phase and Confirm Attack
 
-During `ACTION`, the active side prepares its attack.
+- [x] Ability selection only during ACTION
+- [x] Spell play only during ACTION
+- [x] Display/track selected ability per active squad
+- [x] Add Confirm Attack
+- [x] Prevent opponent-side actions during active turn
+- [x] Prevent deployment changes during ACTION
+- [x] Validate selected actions before confirmation
+- [x] Prevent action changes after resolution starts
+- [x] Add action-phase tests
 
-The active side may:
-
-```text
-select one ability per surviving squad
-cast spells while Mana remains
-inspect resulting combat state
-confirm the attack
-```
-
-Basic squad attacks remain available even when no Mana is spent.
-
-* [x] Allow ability selection only during `ACTION`
-* [x] Allow spell play only during `ACTION`
-* [x] Display/track selected ability for each active squad
-* [x] Add Confirm Attack action
-* [x] Prevent opponent-side actions during the active turn
-* [x] Prevent deployment changes during `ACTION`
-* [x] Validate selected actions before confirmation
-* [x] Prevent further action changes once attack resolution starts
-* [x] Add action-phase tests
-
-Do not require the player to spend all Mana.
-
-Success condition:
-
-> The active side can deliberately prepare a complete attack before committing to resolution.
+Existing rule remains: the player is not required to spend all Mana or play all cards.
 
 ---
 
 ## 0.6.14 Attack Resolution
 
-When Confirm Attack is pressed, resolve only the active side's attack.
-
-Use the existing lane-targeting system.
-
-For each surviving attacking squad:
-
-```text
-same lane
-↓
-FRONT opposing squad if present
-↓
-BACK opposing squad if FRONT absent
-↓
-opposing hero if lane empty
-```
-
-Keep attack resolution deterministic.
-
-* [x] Resolve selected squad abilities
-* [x] Resolve spell effects required before attacks
-* [x] Evaluate attacks for every surviving active-side squad
-* [x] Use existing lane-targeting rules
-* [x] Apply squad damage
-* [x] Remove dead units from squad counts
-* [x] Preserve partial HP on the currently damaged unit
-* [x] Remove/disable squad when count reaches 0
-* [x] Apply direct hero damage when opposing lane is empty
-* [x] Ensure dead squads no longer block lanes
-* [x] Preserve deterministic resolution order
-* [x] Complete Mana spending semantics
-* [x] Add attack-resolution tests
-
-Avoid:
-
-* critical hits;
-* dodge;
-* random damage ranges;
-* complex status effects;
-* initiative inside a single side's attack.
-
-Success condition:
-
-> One complete active-side attack can be resolved entirely through pure TypeScript game logic.
+- [x] Resolve selected squad abilities
+- [x] Resolve spell effects required before attacks
+- [x] Evaluate every surviving active-side squad
+- [x] Use lane-targeting rules
+- [x] Apply squad damage
+- [x] Remove dead units from counts
+- [x] Preserve partial HP
+- [x] Disable squad at count 0
+- [x] Apply direct hero damage through empty lane
+- [x] Dead squads stop blocking lanes
+- [x] Preserve deterministic resolution order
+- [x] Complete Mana spending semantics
+- [x] Add attack-resolution tests
 
 ---
 
 ## 0.6.15 Duskborn Turn AI
 
-The Duskborn follows the same rules as the player.
+- [x] Reuse combat phase system
+- [x] Restore enemy Mana
+- [x] Draw enemy spell
+- [x] Reposition legally
+- [x] Respect lane engagement restrictions
+- [x] Choose legal abilities
+- [x] Choose legal spells
+- [x] Confirm/resolve enemy attack
+- [x] Keep AI deterministic
+- [x] Keep AI independent from Phaser
+- [x] Add enemy-turn tests
+- [x] Preserve already-valid Duskborn deployment
 
-Enemy turns must use:
+Migration:
 
-```text
-TURN_START
-↓
-Mana restore
-↓
-Draw
-↓
-DEPLOYMENT
-↓
-ACTION
-↓
-CONFIRM ATTACK
-↓
-RESOLUTION
-↓
-TURN_END
-```
-
-Use deterministic heuristics for the MVP.
-
-* [x] Reuse the same combat phase system for Duskborn turns
-* [x] Restore enemy Mana at enemy turn start
-* [x] Draw enemy spell
-* [x] Reposition enemy squads using legal deployment rules
-* [x] Respect lane engagement restrictions
-* [x] Choose legal squad abilities
-* [x] Choose legal spells within available Mana
-* [x] Confirm and resolve enemy attack
-* [x] Keep initial AI deterministic
-* [x] Keep AI decision logic independent from Phaser
-* [x] Add enemy-turn tests
-
-Do not add hidden enemy intentions.
-
-The enemy acts openly when its turn begins.
-
-Success condition:
-
-> The Duskborn can complete a legal turn using exactly the same combat rules as the player.
+- [ ] Adapt enemy AI to unified Creature + Spell draw
+- [ ] Add hidden enemy bench/hand behavior under same legality rules
 
 ---
 
 ## 0.6.16 Combat Result
 
-Combat is decided by hero HP.
-
-Victory:
-
-```text
-Enemy hero HP <= 0
-```
-
-Defeat:
-
-```text
-Player hero HP <= 0
-```
-
-Losing all squads does not by itself end combat.
-
-* [x] Detect player victory from enemy hero HP
-* [x] Detect player defeat from player hero HP
-* [x] Check result after attack resolution
-* [x] Stop turn transitions when combat has ended
-* [x] Display combat result
-* [x] Preserve surviving player squad counts
-* [x] Preserve partially damaged surviving units
-* [x] Preserve relevant run resources
-* [x] Add combat-result tests
-
-Do not automatically restore defeated units after combat.
-
-Success condition:
-
-> Combat continues through alternating turns until one hero reaches 0 HP.
+- [x] Detect victory from enemy hero HP
+- [x] Detect defeat from player hero HP
+- [x] Check result after attack resolution
+- [x] Stop transitions after combat ends
+- [x] Display combat result
+- [x] Preserve surviving squad counts
+- [x] Preserve partial damage
+- [x] Preserve relevant run resources
+- [x] Add combat-result tests
 
 ---
 
 ## 0.6.17 Unit-Type Progression
 
-Unit progression belongs to the unit type, not to individual soldiers.
-
-Example:
-
-```text
-Guardians Lv.2
-Archers Lv.3
-```
-
-All current and future units of that type use the same progression.
-
-* [x] Create `UnitTypeProgression`
-* [x] Track XP per unit type during the run
-* [x] Track level per unit type
-* [x] Award unit-type XP after combat
-* [x] Add simple level thresholds
-* [x] Add one ability unlock choice when a unit type levels up
-* [x] Store unlocked abilities per unit type
-* [x] Ensure newly recruited units inherit current type level/abilities
-* [x] Add progression tests
-
-Example direction:
-
-```ts
-interface UnitTypeProgression {
-  unitTypeId: string;
-  level: number;
-  xp: number;
-  unlockedAbilities: string[];
-}
-```
-
-This progression is temporary run progression.
-
-It must remain distinct from account/meta XP earned after a run.
-
-Success condition:
-
-> Unit types become stronger and gain more tactical options during a run.
+- [x] Create `UnitTypeProgression`
+- [x] Track XP per unit type
+- [x] Track level per unit type
+- [x] Award XP after combat
+- [x] Add level thresholds
+- [x] Add ability unlock choice on level-up
+- [x] Store unlocked abilities per unit type
+- [x] New recruits inherit type level/abilities
+- [x] Add progression tests
 
 ---
 
 ## 0.6.18 Combat Interaction and Information Architecture
 
-Before adding final visual polish, make combat interaction feel natural and make the current tactical state immediately understandable.
+- [x] Active side
+- [x] Current combat turn
+- [x] Player-friendly phase wording
+- [x] Player hero HP
+- [x] Enemy hero HP
+- [x] Hero shields
+- [x] Player current/max Mana
+- [x] Enemy Mana where useful
+- [x] Squad count and partial-unit HP
+- [x] Unit-type level
+- [x] Selected ability per player squad
+- [x] Remove Resolve Attack / Continue Resolution control
+- [x] Confirm Attack immediately commits
+- [x] Automatically begin resolution
+- [x] Automatically transition after resolution
+- [x] Domain phases remain authoritative
+- [x] Hide internal orchestration from player
 
-The player should never need to understand internal state-machine transitions in order to play.
+### Required premium presentation refactor
 
-### Combat HUD
-
-Display permanently:
-
-* [x] active side
-* [x] current combat turn
-* [x] current combat phase using player-friendly wording
-* [x] player hero HP
-* [x] enemy hero HP
-* [x] hero shields when active
-* [x] player current / max Mana
-* [x] enemy Mana where useful
-* [x] squad count and current partial-unit HP
-* [x] unit-type level where relevant
-* [x] selected ability per player squad
-
-Avoid presenting implementation terminology such as `RESOLUTION` as an action the player must manually advance.
-
-### Context-sensitive controls
-
-The combat UI must expose only actions meaningful in the current phase.
-
-```text
-DEPLOYMENT
-→ reposition squads
-→ Confirm Deployment
-
-ACTION
-→ inspect/select squad abilities
-→ inspect/play spells
-→ Confirm Attack
-
-RESOLUTION
-→ no gameplay confirmation
-→ automatic presentation of resolved actions
-
-ENEMY TURN
-→ no player controls
-→ observe enemy actions
-
-VICTORY / DEFEAT
-→ result panel
-```
-
-* [x] Remove any player-facing "Resolve Attack" / "Continue Resolution" button
-* [x] Confirm Attack immediately commits the prepared attack
-* [x] Automatically begin visual resolution after confirmation
-* [x] Automatically transition after completed visual resolution when combat is still ongoing
-* [x] Keep domain phase transitions authoritative
-* [x] Prevent UI controls from exposing internal orchestration steps
-
-Success condition:
-
-> The player understands what they can do without needing to understand the combat state machine.
+- [ ] Remove remaining raw/debug-looking text from final combat presentation
+- [ ] Replace plain statuses with designed badges, banners, counters, icons and tooltips
+- [ ] Replace monospace/debug typography in player-facing UI
+- [ ] Establish final depth hierarchy for board, cards, bench, HUD, tooltips and VFX
+- [ ] Make all controls feel like game UI rather than developer controls
 
 ---
 
-## 0.6.19 Visual Hand, Draw and Card Interaction
+## 0.6.19 Unified Combat Card Model
 
-Spells should behave and read like actual cards rather than text commands.
+Replace the spell-only draw model with one unified combat-card deck.
 
-The goal is not to reproduce a full collectible-card-game interface, but to make drawing and playing a spell satisfying and obvious.
+```ts
+type CombatCard = CreatureCard | SpellCard;
+type CombatCardType = 'CREATURE' | 'SPELL';
 
-### Hand
+interface CombatCardBase {
+  instanceId: string;
+  cardType: CombatCardType;
+  contentId: string;
+}
 
-* [x] Render the player's hand persistently during ACTION
-* [ ] Give every spell a replaceable card image / artwork
-* [x] Display spell name
-* [x] Display Mana cost
-* [x] Display concise effect text
-* [x] Visually distinguish affordable and unaffordable cards
-* [x] Allow hover / pointer focus to enlarge or inspect a card
-* [x] Keep cards readable at supported resolutions
-* [x] Fan or arrange cards clearly when multiple cards are held
+interface CreatureCard extends CombatCardBase {
+  cardType: 'CREATURE';
+  unitTypeId: string;
+}
 
-0.6.19A uses placeholder art with optional preloaded texture keys. Per-spell artwork
-remains open. Hands larger than three cards use pages while preserving hand order.
-
-### Draw presentation
-
-At `TURN_START`:
-
-```text
-deck
-↓
-draw card
-↓
-card visibly enters hand
+interface SpellCard extends CombatCardBase {
+  cardType: 'SPELL';
+  spellId: string;
+}
 ```
 
-* [ ] Display a draw pile / deck representation
-* [ ] Animate or visually communicate one spell being drawn
-* [ ] Update hand only once the draw presentation begins
-* [ ] Keep draw animation short
-* [ ] Allow animation skip / fast-forward if useful later
+For the MVP, each owned unit type contributes one Creature card to the combat deck. Recruiting more soldiers of an existing type increases that squad's count; it does not create a duplicate squad or duplicate Creature card unless explicitly redesigned later.
 
-The player must understand:
-
-```text
-"I received this new spell because my turn started."
-```
-
-### Card interaction
-
-Preferred interaction:
-
-```text
-select / drag card
-↓
-show valid targets
-↓
-select target if required
-↓
-commit play
-↓
-Mana paid
-↓
-card enters resolution queue
-```
-
-* [x] Card interaction delegates legality to pure combat-domain APIs
-* [ ] Invalid targets are visually rejected
-* [ ] Cancelling target selection spends no Mana
-* [x] Successfully played card leaves the hand visibly
-* [ ] Card enters discard after resolution according to current rules
-
-Success condition:
-
-> Drawing, inspecting and playing a spell feels like a meaningful game action rather than pressing a text button.
+- [ ] Create pure TypeScript `CombatCard` union
+- [ ] Create unified draw pile containing Creature + Spell cards
+- [ ] Preserve injectable/seeded RNG for tests while allowing random gameplay draw
+- [ ] Migrate current player spell deck into unified deck
+- [ ] Migrate Duskborn deck/equivalent
+- [ ] Preserve one-squad-per-unit-type invariant
+- [ ] Preserve useful spell discard semantics
+- [ ] Define Creature-card lifecycle separately from spell discard
+- [ ] Add unified-card model tests
 
 ---
 
-## 0.6.20 Spell Targeting Model
+## 0.6.20 Opening Draw, Turn Draw, Hand and Bench Rules
 
-The current fixed automatic spell effects are sufficient for engine validation but too limited for the gameplay prototype.
+### Opening draw
 
-Introduce a small explicit targeting model.
+Combat starts with:
 
-Do not build a Magic-style stack or arbitrary scripting system.
+```text
+2 random Creature cards
++
+1 random Spell card
+```
 
-Example direction:
+These cards are selected from their respective eligible pools, removed from the future pool, then all remaining Creature + Spell cards are shuffled into one draw pile.
+
+- [ ] Draw up to 2 Creature cards at combat start
+- [ ] Draw up to 1 Spell card at combat start
+- [ ] Remove opening cards from remaining pool
+- [ ] Shuffle remaining Creature + Spell cards together
+- [ ] Random in gameplay, deterministic under injected/seeded RNG in tests
+- [ ] If a category has too few cards, draw as many as exist
+- [ ] Add opening-draw tests
+
+### Per-turn draw
+
+```text
+TURN_START
+-> restore Mana
+-> draw exactly 1 card from unified pile
+-> route by card type
+```
+
+- [ ] Draw one mixed card per turn
+- [ ] Empty draw pile => no-op
+- [ ] No automatic reshuffle for MVP
+- [ ] Ensure one draw per turn only
+- [ ] Add empty-deck/idempotency tests
+
+### Spell hand
+
+Recommended MVP tuning constant:
+
+```ts
+MAX_SPELL_HAND = 5
+```
+
+- [ ] Spell draw enters Spell hand
+- [ ] Spell hand persists between turns
+- [ ] Player is never forced to cast all spells
+- [ ] Hand cannot exceed configured limit
+- [ ] Full-hand draw burns/discards new Spell card with explicit visual feedback
+- [ ] Add hand-limit tests
+
+### Creature bench
+
+Recommended MVP tuning constant:
+
+```ts
+MAX_CREATURE_BENCH = 5
+```
+
+- [ ] Creature draw enters Creature bench
+- [ ] Bench persists across player turns in combat
+- [ ] Player is never forced to deploy all bench creatures
+- [ ] Bench cannot exceed configured limit
+- [ ] Full-bench draw burns/discards new Creature card with explicit visual feedback
+- [ ] Bench Creature maps to exactly one unit type/squad identity
+- [ ] Add bench-limit tests
+
+### Player agency
+
+- [ ] Player may end deployment with Creature cards left on bench
+- [ ] Player may Confirm Attack with playable spells still in hand
+- [ ] Unused cards remain available on later turns unless explicitly removed
+
+---
+
+## 0.6.21 Permanent Card Hand and Creature Bench Presentation
+
+The card UI must be visible throughout the entire player turn, including DEPLOYMENT.
+
+At 960x540 logical resolution:
+
+```text
++------------------------------------------------------------+
+|                    ENEMY HUD / HERO                        |
+|                    ENEMY BOARD                             |
+|                    PLAYER BOARD                            |
+|                                                            |
+| BENCH                    SPELL HAND              MANA/HERO |
+| [C][C]              [S][S][S][S][S]                       |
++------------------------------------------------------------+
+```
+
+Preferred placement:
+
+```text
+Spell hand -> bottom center, slightly fanned, always visible during player turn
+Creature bench -> lower-left/lower-side adjacent to board
+```
+
+- [ ] Render Spell hand throughout full player turn
+- [ ] Render Creature bench throughout full player turn
+- [ ] Never hide Spell hand during deployment
+- [ ] Keep opponent card identities hidden
+- [ ] Show opponent card counts only where useful
+- [ ] Keep Hearthstone-like bottom-center hand silhouette without copying assets
+- [ ] Keep board interaction unobstructed
+- [ ] Support 960x540 logical canvas and responsive fitting
+- [ ] Support high-DPI text/textures
+- [ ] Add `CombatHandView` / equivalent
+- [ ] Add `CreatureBenchView` / equivalent
+- [ ] Views rebuild from domain state, never own gameplay card state
+
+---
+
+---
+
+## 0.6.22 AAA Card Visual System and Replaceable Assets
+
+The current placeholder card UI is not the final target. Cards should evoke premium fantasy card games while remaining original to Duskborn.
+
+### Visual principles
+
+```text
+large illustrated focal area
+strong Creature vs Spell differentiation
+integrated Mana badge
+designed nameplate
+rules panel inside the card frame
+subtle shadow / glow / depth
+hover lift and slight perspective
+no raw debug text floating beside cards
+```
+
+### Source asset specifications
+
+Use these source sizes so artwork can be replaced later without changing code or layout logic:
+
+```text
+Full card frame PNG
+768 x 1080 px
+RGBA / transparent
+portrait orientation
+24 px outer transparent safe padding
+
+Card back PNG
+768 x 1080 px
+
+Card artwork master
+1024 x 1024 px minimum
+square source
+Phaser crops/masks into artwork window
+important subject inside central 80% safe area
+
+Mana / type / status icons
+256 x 256 px
+transparent PNG
+
+Board unit portrait/token
+512 x 512 px
+transparent PNG preferred
+subject inside central 85%
+
+Hero portrait
+1024 x 1024 px
+square master, masked by UI
+```
+
+Recommended render sizes at 960x540:
+
+```text
+normal hand card: 96-112 px wide x 135-158 px high
+focused card: 130-150 px wide x 183-211 px high
+bench Creature card: 82-96 px wide x 115-135 px high
+```
+
+### Layer architecture
+
+Prefer layered composition:
+
+```text
+shadow
+frame texture
+masked artwork
+Mana badge
+card-type emblem
+nameplate
+rules panel
+text/icons
+playable/selected glow
+```
+
+Never bake dynamic gameplay values into art PNGs:
+
+```text
+Mana cost
+unit count
+HP
+level
+selected ability
+buff/debuff values
+hand state
+```
+
+- [ ] Add visual asset refs to Creature/unit content
+- [ ] Add visual asset refs to Spell definitions
+- [ ] Add Creature and Spell frame keys
+- [ ] Add shared card-back key
+- [ ] Add fallback artwork texture
+- [ ] Add common Phaser preload manifest
+- [ ] Replacing artwork requires no TypeScript gameplay change
+- [ ] Creature and Spell cards have clearly different frames
+- [ ] Affordable cards get subtle playable glow
+- [ ] Unaffordable cards remain readable but muted
+- [ ] Hover lifts/scales card and increases depth
+- [ ] Selected/dragged card gets stronger focus glow
+- [ ] Tween cards entering/leaving/reflowing instead of instant jumps
+- [ ] Add slight fan/rotation when useful
+- [ ] Avoid literal copies of Hearthstone or MTG frames
+
+Success condition:
+
+> A combat screenshot reads as a deliberate fantasy card/strategy game rather than a text-heavy prototype.
+
+---
+
+## 0.6.23 Draw Pile, Opening Deal and Draw Animation
+
+The draw must be visible before deployment begins.
+
+### Draw pile
+
+- [ ] Render card-back draw pile near lower-right/lower-center player HUD
+- [ ] Display remaining draw count in designed badge
+- [ ] Display discard/burn count in secondary badge
+- [ ] Never reveal future card identities
+
+### Opening deal
+
+```text
+combat scene enters
+-> deck appears
+-> Creature #1 dealt to bench
+-> Creature #2 dealt to bench
+-> Spell dealt to hand
+-> remaining deck visibly settles/shuffles
+-> DEPLOYMENT becomes interactive
+```
+
+- [ ] Animate first Creature to bench
+- [ ] Animate second Creature to bench
+- [ ] Animate opening Spell to hand
+- [ ] Reveal actual card after travel/flip timing
+- [ ] Lock deployment only during short opening deal
+- [ ] Keep total opening deal around 1.2-2.0 s
+
+### Turn draw
+
+```text
+YOUR TURN banner
+-> Mana refresh pulse
+-> card back lifts from deck
+-> card travels
+-> card reveals
+-> Spell -> hand
+   Creature -> bench
+-> DEPLOYMENT interactive
+```
+
+- [ ] Animate exactly one card draw per turn
+- [ ] Route animation toward hand or bench by card type
+- [ ] Reveal during travel or on arrival
+- [ ] Use Phaser tweens/easing
+- [ ] Keep normal draw around 0.45-0.8 s
+- [ ] Empty deck produces no fake animation
+
+### Overflow feedback
+
+- [ ] Full hand/bench still reveals drawn card
+- [ ] Play burn/overflow feedback
+- [ ] Move burned card toward discard/burn indicator
+- [ ] Never silently destroy overflow card
+
+### Fast presentation
+
+- [ ] Allow click/tap or configured fast mode to accelerate presentation without changing domain result
+
+---
+
+## 0.6.24 Creature Card Deployment from Bench
+
+Creature cards represent unit types available to field.
+
+### Bench interaction
+
+- [ ] Creature hover raises/enlarges card
+- [ ] Drag Creature from bench to legal player board cell
+- [ ] Highlight legal cells during drag
+- [ ] Highlight invalid cells distinctly
+- [ ] Drop on empty legal cell deploys squad
+- [ ] Drop on deployed friendly squad performs atomic null/position exchange
+- [ ] Deployed <-> deployed drag still swaps positions
+- [ ] Drag deployed squad back onto its bench card undeploys it when legal
+- [ ] Cancelled drag returns cleanly without mutation
+
+### Board representation
+
+Once deployed, a creature becomes a combat unit/token rather than remaining a full hand card.
+
+- [ ] Use unit portrait/standee/token on board
+- [ ] Unit count uses designed badge
+- [ ] Partial HP uses icon/bar treatment
+- [ ] Level is unobtrusive
+- [ ] Selected ability uses icon/badge instead of raw text
+- [ ] Board unit remains recognizable from its Creature-card artwork
+
+### Optional deployment
+
+- [ ] Player may leave Creature cards on bench after Confirm Deployment
+- [ ] Bench creatures do not attack
+- [ ] Bench creatures cannot be targeted by normal lane attacks
+- [ ] Bench creatures remain available on later turns unless explicitly removed
+
+---
+
+## 0.6.25 Spell Card Interaction and Targeting
+
+Replace click-to-auto-resolve spell behavior with explicit tactical targeting.
+
+Recommended target model:
 
 ```ts
 type SpellTargetType =
@@ -1166,162 +832,65 @@ type SpellTargetType =
   | 'ANY_SQUAD';
 ```
 
-Exact structure may follow the existing architecture.
+- [ ] Add target rules to Spell definitions
+- [ ] Query legal targets in pure TypeScript
+- [ ] Store selected target as prepared action
+- [ ] Validate target again on commit
+- [ ] Prevent targeting dead squads
+- [ ] Prevent illegal friendly/enemy targets
+- [ ] Make target selection + Mana spending atomic
 
-### Spell definition
-
-A spell should declare:
-
-```text
-Mana cost
-target rule
-effect
-effect value
-visual asset
-```
-
-* [ ] Add target rule to spell content definitions
-* [ ] Query legal spell targets through pure TypeScript
-* [ ] Store selected spell target as part of the prepared action
-* [ ] Validate target again when committing the spell
-* [ ] Do not allow targeting dead squads
-* [ ] Do not allow illegal friendly/enemy targets
-* [ ] Ensure target selection and Mana spending are atomic
-
-### Initial spell redesign
-
-Give the first spell set distinct tactical purposes.
-
-Recommended direction:
+Preferred interaction:
 
 ```text
-Firebolt
-→ target enemy squad OR enemy hero
-→ direct damage
-
-Barrier
-→ target friendly squad or friendly hero
-→ temporary protection / shield
-
-Battle Cry
-→ target friendly squad
-→ improve its attack for this resolution
-
-Dusk Strike
-→ enemy equivalent offensive spell
-
-Dark Ward
-→ enemy defensive spell
+hover Spell card
+-> card lifts
+-> drag or click-select
+-> board dims slightly
+-> legal targets glow
+-> target focus ring / aim line
+-> release/click target
+-> spell commits
 ```
 
-Exact numbers can remain simple.
+- [ ] Pointer-driven spell targeting
+- [ ] Legal target highlights
+- [ ] Invalid target feedback
+- [ ] ESC/right-click/outside drop cancels without Mana
+- [ ] Cancelled card returns smoothly to hand
+- [ ] Successful spell leaves hand and enters discard/resolution lifecycle
 
-Do not require all spells to use the same target type.
-
-### Gameplay requirement
-
-Spells should answer different tactical questions:
+Initial spell direction:
 
 ```text
-Do I finish a weakened squad?
-Do I pressure the hero?
-Do I protect a valuable squad?
-Do I amplify the lane that matters this turn?
+Firebolt -> enemy squad OR enemy hero -> direct damage
+Barrier -> friendly squad OR hero -> shield
+Battle Cry -> friendly deployed squad -> attack amplification
 ```
-
-Success condition:
-
-> A spell creates a deliberate tactical choice of effect and, where appropriate, target.
 
 ---
 
-## 0.6.21 Attack Preview and Commitment
+## 0.6.26 Attack Preview and Commitment
 
-Before Confirm Attack, the player should understand what their prepared attack is expected to do.
-
-Do not reveal hidden randomness because combat is deterministic.
-
-### Target preview
-
-For each surviving player squad during ACTION:
-
-* [ ] Show its currently selected ability
-* [ ] Show its predicted target
-* [ ] Visually connect attacker and target
-* [ ] Clearly indicate attacks that will hit the enemy hero
-* [ ] Update previews immediately after ability selection
-* [ ] Update previews after spell preparation when that spell changes attack outcome
-
-Preferred presentation:
-
-```text
-squad
-→ subtle arrow / lane highlight
-→ target
-```
-
-### Damage preview
-
-Recommended MVP:
-
-* [ ] Display expected outgoing damage when deterministic
-* [ ] Display expected lethal result where useful
-* [ ] Avoid overwhelming the board with numbers
-* [ ] Clearly distinguish preview from already-applied damage
-
-Examples:
-
-```text
-Archer ×3
-Power Shot
-→ Duskborn Brute
-15 damage
-```
-
-or:
-
-```text
-Guardian ×5
-→ HERO
-20 damage
-```
-
-### Confirm Attack
-
-Confirm Attack should mean:
-
-```text
-"I commit these actions."
-```
-
-After pressing it:
-
-```text
-player input locks
-↓
-spell / ability / attack sequence begins automatically
-```
-
-No additional resolution confirmation.
-
-Success condition:
-
-> The player understands the likely consequence of committing the turn.
+- [ ] Show selected ability for each deployed player squad with designed icon/badge
+- [ ] Show predicted target
+- [ ] Visually connect attacker and target
+- [ ] Clearly indicate hero-directed attacks
+- [ ] Update previews after deployment/ability/spell changes
+- [ ] Display expected deterministic damage where useful
+- [ ] Display likely lethal result without clutter
+- [ ] Confirm Attack is final commitment click
+- [ ] Lock player input immediately after commit
 
 ---
 
-## 0.6.22 Combat Resolution Event Stream
-
-Separate logical resolution from presentation timing.
-
-Pure TypeScript remains authoritative.
-
-Instead of Phaser trying to infer what happened by diffing states, expose a deterministic list of resolved combat events.
-
-Example direction:
+## 0.6.27 Combat Resolution Event Stream
 
 ```ts
 type CombatEvent =
+  | CardDrawEvent
+  | CreatureDeployEvent
+  | CreatureUndeployEvent
   | SpellCastEvent
   | AbilityUsedEvent
   | SquadAttackEvent
@@ -1332,488 +901,252 @@ type CombatEvent =
   | CombatResultEvent;
 ```
 
-Exact architecture may differ.
-
-Example sequence:
-
-```text
-SPELL_CAST Firebolt
-DAMAGE Duskborn Archer 5
-SQUAD_ATTACK Guardian -> Brute
-DAMAGE Brute 16
-UNIT_DEATH Brute ×2
-SQUAD_ATTACK Archer -> Hero
-HERO_DAMAGE 12
-```
-
-* [ ] Produce deterministic ordered resolution events
-* [ ] Preserve final CombatState as source of truth
-* [ ] Events contain enough information for presentation
-* [ ] Phaser consumes events sequentially
-* [ ] Presentation speed does not affect domain result
-* [ ] Tests can assert both state and event ordering
-* [ ] No Phaser types in combat-domain events
-
-This layer is important because it allows gameplay animations without contaminating combat logic.
-
-Success condition:
-
-> A complete attack can be presented step-by-step while remaining fully deterministic and testable.
+- [ ] Produce deterministic ordered events
+- [ ] Preserve final CombatState as source of truth
+- [ ] Events contain sufficient presentation data
+- [ ] No Phaser types in domain events
+- [ ] Presentation speed does not change result
+- [ ] Tests assert event ordering
 
 ---
 
-## 0.6.23 Attack, Damage and Death Presentation
+## 0.6.28 Attack, Damage, Death and Spell VFX
 
-Add a short readable presentation sequence for combat events.
+Use Phaser as a presentation engine, not only a canvas for labels.
 
-Do not pursue expensive production animation yet.
+### Creature attacks
 
-Use simple Phaser tweens, flashes, particles and replaceable assets.
-
-### Squad attack
-
-Depending on unit identity:
-
-```text
-melee
-→ short lunge / impact
-
-ranged
-→ projectile
-
-spell
-→ spell-specific projectile / VFX
-```
-
-* [ ] Attacker visibly activates
-* [ ] Target visibly reacts
-* [ ] Keep attacker in its logical grid position after presentation
+- [ ] Melee lunge / anticipation / impact tween
+- [ ] Ranged projectile or tracer
+- [ ] Attacker visibly activates
+- [ ] Target reacts on impact
+- [ ] Unit token returns to logical position after presentation
 
 ### Damage
 
-* [ ] Brief hit flash
-* [ ] Floating damage number
-* [ ] Update squad count / partial HP after impact
-* [ ] Update hero HP after hero impact
-* [ ] Show absorbed shield damage distinctly where practical
+- [ ] Hit flash / tint pulse
+- [ ] Floating damage number in designed combat font treatment
+- [ ] HP/count badge updates on impact
+- [ ] Shield absorption has distinct response
 
-### Casualties
+### Death
 
-When damage kills units within a squad:
+- [ ] Casualty reduction visibly updates count
+- [ ] Full squad death uses fade/dissolve/break animation
+- [ ] Lane opens only after readable death presentation
 
-* [ ] Visually communicate unit loss
-* [ ] Update displayed squad count after impact
-* [ ] Provide stronger feedback when the whole squad dies
+### Hero feedback
 
-### Squad death
+- [ ] Hero portrait/frame reacts strongly to hit
+- [ ] Hero HP animates to new value
+- [ ] Optional short camera shake for major hits only
 
-* [ ] Play a short death/fade/break animation
-* [ ] Remove squad visual only after death feedback
-* [ ] Ensure lane visibly becomes open afterwards
+### Spell VFX
 
-### Hero damage
+- [ ] Firebolt projectile + impact
+- [ ] Barrier shield pulse/aura
+- [ ] Battle Cry pulse/glow
+- [ ] Duskborn effects use distinct visual language
+- [ ] Missing VFX falls back safely
+- [ ] VFX lookup is data-driven
 
-* [ ] Stronger screen/hero feedback than ordinary squad damage
-* [ ] Clearly show HP changing
-* [ ] Keep effects brief enough for repeated combats
-
-### Timing
-
-Target initial pacing:
+Timing targets:
 
 ```text
-ordinary hit:
-~0.25–0.45 s
-
-death:
-~0.4–0.7 s
-
-spell:
-~0.4–0.8 s
+normal hit: 0.25-0.45 s
+death: 0.4-0.7 s
+spell: 0.4-0.8 s
 ```
-
-Exact timings should be tuned through playtesting.
-
-* [ ] No unnecessary multi-second pauses
-* [ ] Allow sequence acceleration later if combat becomes slow
-
-Success condition:
-
-> The player can visually follow exactly what attacked, what was hit, how much damage occurred, and what died.
 
 ---
 
-## 0.6.24 Spell Visual Effects
+## 0.6.29 Premium Combat HUD and UX Pass
 
-Every initial spell should have recognizable visual feedback.
+### Typography
 
-Placeholder effects are sufficient.
+- [ ] Choose readable display font + UI/body font
+- [ ] Remove monospace/debug font from player-facing combat UI
+- [ ] Define typography scale for card names, rules, counters, banners and tooltips
 
-Do not require final artwork.
+### Panels and controls
 
-Examples:
+- [ ] Replace plain rectangles with textured/9-slice panels
+- [ ] Mana uses icon/gem treatment rather than plain text
+- [ ] Hero HP uses framed portrait + health treatment
+- [ ] Turn/phase uses compact animated banner
+- [ ] Confirm Deployment / Confirm Attack use proper hover/pressed/disabled states
+- [ ] Add tooltips for icons and abilities
+- [ ] Remove redundant text where iconography/animation communicates the state
 
-```text
-Firebolt
-→ projectile + fire impact
+### Camera and depth
 
-Barrier
-→ shield pulse / temporary aura
+- [ ] Stable depth layers: background, grid, units, cards, tooltips, VFX, results
+- [ ] Use subtle camera/tween feedback, not constant shake
+- [ ] Hovered card always above hand neighbors
+- [ ] VFX render above units but below critical HUD/tooltips where appropriate
 
-Battle Cry
-→ squad glow / burst
+### Audio hooks
 
-Dusk Strike
-→ dark projectile / impact
-
-Dark Ward
-→ dark shield
-```
-
-* [ ] Define spell visual-effect key/reference in content
-* [ ] Keep effect lookup data-driven
-* [ ] Create placeholder VFX for every initial spell
-* [ ] Show effect travelling to target when appropriate
-* [ ] Play impact before applying visible HP/count update
-* [ ] Do not encode combat effect rules inside VFX code
-* [ ] Missing VFX safely falls back to generic feedback
-
-Success condition:
-
-> The player can identify what kind of spell just occurred without reading the combat log.
+- [ ] card draw SFX hook
+- [ ] card hover/select SFX hook
+- [ ] deploy SFX hook
+- [ ] spell cast SFX hook
+- [ ] hit/death SFX hook
+- [ ] turn banner SFX hook
 
 ---
 
-## 0.6.25 Enemy Turn Readability and Pacing
+## 0.6.30 Enemy Turn Readability and Card Pacing
 
-The enemy acts automatically, but its decisions must remain readable.
-
-Do not reintroduce pre-turn hidden intentions.
-
-During its active turn:
-
-```text
-deployment adjustment
-↓
-ability / spell choices
-↓
-attack resolution
-```
-
-* [ ] Visually show meaningful Duskborn repositioning
-* [ ] Do not animate squads that stay in place
-* [ ] Briefly show spell/ability chosen when relevant
-* [ ] Present enemy spell cast before its effect
-* [ ] Present attacks sequentially using the same event system
-* [ ] Keep enemy turn fast
-* [ ] Automatically return control after the sequence
-* [ ] Clearly indicate when player control returns
-
-Recommended:
-
-```text
-small banner:
-DUSKBORN TURN
-
-...
-
-YOUR TURN
-```
-
-Avoid modal confirmations.
-
-Success condition:
-
-> The player can understand what the enemy did without having to control or confirm the enemy turn.
+- [ ] Adapt enemy to unified draw pile
+- [ ] Enemy draws one mixed card per turn
+- [ ] Enemy Creature draw enters hidden reserve/bench
+- [ ] Enemy Spell draw enters hidden hand
+- [ ] Enemy obeys hand/bench limits
+- [ ] Enemy may leave units undeployed
+- [ ] Preserve already-valid enemy deployment when no correction is needed
+- [ ] Visually show meaningful deployment changes
+- [ ] Do not animate units that stay in place
+- [ ] Reveal enemy Spell card only when played
+- [ ] Present enemy spell target before effect
+- [ ] Present attacks sequentially through event stream
+- [ ] Keep enemy turn concise
+- [ ] Automatically return control to player
+- [ ] Clearly indicate `YOUR TURN`
 
 ---
 
-## 0.6.26 Replaceable Combat Visual Assets
+## 0.6.31 Tactical Content Vertical Slice
 
-Reuse the existing asset direction.
+### Creature identities
 
-### Units
-
-* [ ] Add visual asset reference to unit-type content definitions
-* [ ] Create placeholder PNG for Guardian
-* [ ] Create placeholder PNG for Archer
-* [ ] Create placeholder PNG for Duskborn Brute
-* [ ] Create placeholder PNG for Duskborn Archer
-* [ ] Define consistent unit-image dimensions/aspect ratio
-* [ ] Load through common Phaser preload flow
-* [ ] Provide missing-asset fallback
-* [ ] Render images on grid squad representations
-
-### Spells
-
-* [ ] Add image reference to spell definitions
-* [ ] Create placeholder PNG assets for all initial spells
-* [ ] Define consistent spell-card aspect ratio
-* [ ] Render cards in hand
-* [ ] Provide missing-asset fallback
-
-### Dynamic information remains UI
-
-Never bake into PNG:
-
-```text
-HP
-count
-level
-Mana cost
-selected ability
-buff/debuff
-```
-
-* [ ] Replacing artwork requires no TypeScript logic change
-
-Success condition:
-
-> Prototype visuals can progressively be upgraded without refactoring gameplay code.
-
----
-
-## 0.6.27 Tactical Content Vertical Slice
-
-Before judging the combat, ensure there are enough meaningful options to actually test its potential.
-
-The goal is NOT content volume.
-
-The goal is to ensure each system creates decisions.
-
-### Unit identities
-
-Guardian should meaningfully reward:
-
-```text
-frontline
-protection
-survival
-```
-
-Archer should meaningfully reward:
-
-```text
-backline
-damage
-positioning
-```
-
-Duskborn Brute:
-
-```text
-pressure
-high direct threat
-```
-
-Duskborn Archer:
-
-```text
-ranged pressure
-different positional behavior
-```
-
-* [ ] Review baseline ability of each type
-* [ ] Review progression ability choices
-* [ ] Ensure at least two tactically distinct choices exist for progressed player unit types
-* [ ] Avoid abilities that differ only by a small damage number
+- [ ] Review Guardian: frontline / protection / survival
+- [ ] Review Archer: backline / damage / positioning
+- [ ] Review Duskborn Brute: pressure / direct threat
+- [ ] Review Duskborn Archer: ranged pressure / positional identity
+- [ ] Ensure progression abilities create qualitatively different choices
 
 ### Spell package
 
-Target approximately 5–8 prototype player spells before final combat review.
+Target approximately 5-8 player Spell cards:
 
-Ensure the package includes at least:
+- [ ] direct damage
+- [ ] protection
+- [ ] attack amplification
+- [ ] lane/position interaction
+- [ ] hero-vs-squad target choice
 
-* [ ] direct damage
-* [ ] protection
-* [ ] attack amplification
-* [ ] positional / lane interaction
-* [ ] one spell that creates an interesting target choice
+### Initial combat deck
 
-Do not add cards just for quantity.
-
-### Synergy
-
-Include at least a few interactions such as:
-
-```text
-position
-+
-ability
-+
-spell
-```
-
-Example:
-
-```text
-Archer BACK bonus
-+
-Power Shot
-+
-Battle Cry
-```
-
-The player should be able to deliberately build a stronger turn through combined decisions.
-
-Success condition:
-
-> A player can experience several meaningfully different tactical turns within a single short combat.
+- [ ] Define initial player deck composition
+- [ ] Ensure opening draw can satisfy 2 Creature + 1 Spell with initial content
+- [ ] Ensure remaining mixed deck can yield both types later
+- [ ] Keep total content deliberately small until fun is validated
 
 ---
 
-## 0.6.28 Combat Game-Feel Playtest Pass
+## 0.6.32 Combat Integration Tests
 
-Run repeated manual prototype combats before moving deeper into the rest of the game.
+- [ ] Unified Creature + Spell deck construction
+- [ ] Opening 2 Creature + 1 Spell draw
+- [ ] Remaining-deck shuffle
+- [ ] One mixed draw per turn
+- [ ] Empty draw pile no-op
+- [ ] Spell hand limit
+- [ ] Creature bench limit
+- [ ] Overflow/burn behavior
+- [ ] Optional bench deployment
+- [ ] Deployed <-> deployed swap
+- [ ] Undeployed <-> deployed replacement
+- [ ] Spell target legality
+- [ ] Cancelled targeting spends no Mana
+- [ ] Confirm Attack starts resolution without extra confirmation
+- [ ] Deterministic CombatEvent ordering
+- [ ] Damage before death event
+- [ ] Lethal combat stops later events
+- [ ] Progression-unlocked abilities remain usable
+- [ ] Full player -> enemy -> player cycle
 
-Test for:
+Avoid brittle frame-by-frame animation tests. Test domain state/events and manually verify presentation.
+
+---
+
+## 0.6.33 Combat Game-Feel Playtest Pass
 
 ### Clarity
 
-* [ ] Player always knows whose turn it is
-* [ ] Player always knows what actions are currently available
-* [ ] Targeting rules are understood without documentation
-* [ ] Damage and deaths are visually understandable
+- [ ] Player always knows whose turn it is
+- [ ] Spell hand visible during deployment
+- [ ] Creature bench visible during deployment
+- [ ] Player understands what was drawn and where it went
+- [ ] Targeting understood without documentation
+- [ ] Damage and deaths readable visually
 
 ### Agency
 
-* [ ] Deployment decisions matter
-* [ ] Ability choices matter
-* [ ] Spell targets matter
-* [ ] Mana creates meaningful trade-offs
-* [ ] Player sometimes changes plan after drawing a card
+- [ ] Player sometimes intentionally leaves Creature on bench
+- [ ] Player sometimes saves Spell for later turn
+- [ ] Draw changes intended deployment/action plan
+- [ ] Mana creates real ability-vs-spell trade-offs
+- [ ] Position changes ability value
 
-### Feedback
+### Feel
 
-* [ ] Draw feels rewarding
-* [ ] Spell cast feels responsive
-* [ ] Attack impact feels satisfying
-* [ ] Squad death feels important
-* [ ] Hero damage feels dangerous
-* [ ] Victory feels conclusive
+- [ ] Opening deal feels polished
+- [ ] Card hover feels responsive
+- [ ] Card draw feels rewarding
+- [ ] Creature deployment feels tactile
+- [ ] Spell targeting feels tactile
+- [ ] Attack impact feels satisfying
+- [ ] Squad death feels important
+- [ ] Hero damage feels dangerous
+- [ ] Victory feels conclusive
 
-### Pacing
-
-Measure approximately:
-
-```text
-time to make deployment decision
-time to make ACTION decision
-resolution animation duration
-enemy turn duration
-total combat duration
-```
-
-Recommended MVP targets, to tune rather than treat as hard requirements:
+Pacing targets:
 
 ```text
-normal player resolution:
-~2–5 seconds
-
-enemy turn presentation:
-~3–7 seconds
-
-ordinary combat:
-roughly 3–8 minutes
+opening deal: 1.2-2.0 s
+normal turn draw: 0.45-0.8 s
+normal player resolution: 2-5 s
+enemy turn presentation: 3-7 s
+ordinary combat: 3-8 min
 ```
 
-* [ ] No unnecessary confirmation click
-* [ ] No animation routinely blocks decision-making for too long
-* [ ] Repeated animations remain tolerable after several combats
-
-### Strategic interest
-
-After multiple combats ask:
-
-* [ ] Did lane placement create real dilemmas?
-* [ ] Did I intentionally leave or attack an open lane?
-* [ ] Did I choose between an ability and a spell because of Mana?
-* [ ] Did card draw alter my intended turn?
-* [ ] Did positioning change ability value?
-* [ ] Did unit losses change later decisions?
-* [ ] Did progression create a strategy I wanted to continue?
-
-Success condition:
-
-> A tester can play several combats for enjoyment rather than merely verifying that the systems function.
+- [ ] No unnecessary confirmation click
+- [ ] Repeated animations remain tolerable
+- [ ] Fast-forward/skip preserves correctness
 
 ---
 
-## 0.6.29 Combat MVP Integration Tests
-
-Retain and extend the existing integration-test checklist.
-
-In addition to current logical coverage, add:
-
-* [ ] targeted spell validation
-* [ ] invalid spell-target rejection
-* [ ] prepared spell target persistence
-* [ ] Confirm Attack starts resolution without extra domain confirmation
-* [ ] deterministic CombatEvent ordering
-* [ ] spell event before squad attack event
-* [ ] damage event before death event
-* [ ] lethal event stops later combat events when combat ends
-* [ ] progression-unlocked abilities remain usable
-* [ ] full player → enemy → player cycle after presentation-independent domain simulation
-
-Animations themselves do not require fragile frame-by-frame tests.
-
-Test domain events and state; manually verify presentation.
-
-Success condition:
-
-> The full gameplay loop remains deterministic even though its presentation is animated.
-
----
-
-## 0.6.30 Combat MVP Review and Investment Gate
-
-Do not treat this as only a rules review.
-
-This is the decision point for whether the combat is compelling enough to justify expanding the rest of the game.
-
-Review the existing questions plus:
+## 0.6.34 Combat MVP Review and Investment Gate
 
 ### Core fun
 
-* [ ] Would I voluntarily play another battle?
-* [ ] Is there a satisfying decision at least once per turn?
-* [ ] Does a strong turn feel earned?
-* [ ] Is there enough uncertainty from hand/draw without losing tactical control?
-* [ ] Can the player understand why they won or lost?
+- [ ] Would I voluntarily play another battle?
+- [ ] Is there a satisfying decision at least once per turn?
+- [ ] Does a strong turn feel earned?
+- [ ] Does mixed Creature/Spell draw create interesting uncertainty?
+- [ ] Can the player understand why they won or lost?
 
 ### Identity
 
-* [ ] Does lane coverage distinguish Duskborn from a generic card battler?
-* [ ] Do persistent squads create emotional/strategic value?
-* [ ] Does combining placement + abilities + spells feel distinctive?
-* [ ] Is the game borrowing strengths from its inspirations without becoming a weaker clone?
+- [ ] Does lane coverage distinguish Duskborn from a generic card battler?
+- [ ] Do persistent squads create strategic/emotional value?
+- [ ] Does Creature bench + Spell hand create distinctive tactical rhythm?
+- [ ] Does placement + abilities + spells feel cohesive?
+- [ ] Is the game borrowing strengths from inspirations without becoming a weaker clone?
 
 ### Investment gate
 
-Before expanding content significantly, explicitly decide:
-
 ```text
-CONTINUE
-→ core combat is already enjoyable
-→ invest in exploration, roster, content and production
-
-ITERATE
-→ core idea works but specific systems need adjustment
-
-RETHINK
-→ combat is technically functional but not compelling
+CONTINUE -> core combat is enjoyable; invest deeper
+ITERATE -> core idea works but needs targeted changes
+RETHINK -> technically functional but not compelling
 ```
-
-Success condition:
-
-> The combat prototype is polished enough that its fun—not missing UI or feedback—determines whether development continues.
 
 ---
 
 # 0.7 New Day and Exploration Growth Loop
-
-The post-combat loop must return the player to exploration while preserving meaningful consequences and newly acquired tactical options.
 
 ## 0.7.1 New Day Transition
 
@@ -1824,352 +1157,120 @@ The post-combat loop must return the player to exploration while preserving mean
 - [ ] Preserve surviving squads
 - [ ] Preserve squad damage
 - [ ] Preserve unit-type progression
-- [ ] Preserve acquired spells
+- [ ] Preserve acquired Spell cards
+- [ ] Preserve acquired Creature/unit types
 - [ ] Preserve Gold and exploration resources
 - [ ] Preserve run stats
 - [ ] Add day transition tests
 
-Do not preserve `currentCombatMana` across combat/exploration.
-
-Combat Mana is reconstructed/refreshed from combat rules.
-
-Success condition:
-
-> Day 1 → combat → Day 2 → combat → Day 3 works continuously with persistent run progression.
-
-This is the first major gameplay milestone.
-
-Question to validate:
-
-> Does the player want to play one more day?
-
 ---
 
-## 0.7.2 Run Roster
+## 0.7.2 Run Roster and Creature-Card Ownership
 
-The player owns a run-level roster of typed squads.
-
-The combat rule remains:
-
-> One indivisible squad per unit type.
-
-Examples:
-
-```text
-Guardians ×8
-Archers ×3
-```
-
-Recruiting additional units of an already-owned type increases that squad's count.
-
-Example:
-
-```text
-Guardians ×8
-Recruit 2 Guardians
-↓
-Guardians ×10
-```
-
-Recruiting a new unit type creates that type's single squad.
-
-Example:
-
-```text
-Current roster:
-Guardians ×8
-Archers ×3
-
-Recruit:
-Arcanists ×2
-
-Result:
-Guardians ×8
-Archers ×3
-Arcanists ×2
-```
-
-- [ ] Create run-level typed player roster if not already represented appropriately
+- [ ] Create/preserve run-level typed roster
 - [ ] Persist roster between exploration and combat
-- [ ] Preserve surviving squad counts after combat
-- [ ] Recruiting an existing unit type increases its squad count
-- [ ] Recruiting a new unit type creates exactly one squad for that type
-- [ ] Preserve the one-squad-per-unit-type invariant
-- [ ] Ensure recruited units inherit current unit-type progression
-- [ ] Integrate or migrate the existing generic `Army` RunState value without breaking existing behavior
-- [ ] Display current roster during exploration
+- [ ] Preserve surviving counts after combat
+- [ ] Recruiting existing type increases squad count
+- [ ] Recruiting new type creates exactly one squad
+- [ ] Preserve one-squad-per-unit-type invariant
+- [ ] New recruits inherit type progression
+- [ ] One Creature card entry per owned unit type in combat deck construction
+- [ ] Integrate/migrate legacy Army value
+- [ ] Display roster during exploration
 - [ ] Add roster tests
-
-Success condition:
-
-> The army used in combat is progressively built and reinforced through exploration during the run.
 
 ---
 
 ## 0.7.3 Rally and Recruitment Locations
 
-Add exploration locations where units may join the player's army.
-
-For the MVP, one `Rally` tile/location is enough.
-
-Example:
-
-```text
-RALLY POINT
-
-3 Guardians offer to join you.
-
-Recruit
-→ Guardians +3
-```
-
-Possible later variations:
-
-```text
-Mercenary Camp
-Refugees
-Barracks
-Faction recruitment
-```
-
-- [ ] Add Rally / Recruitment exploration tile type
-- [ ] Render Rally tile on exploration map
-- [ ] Open simple recruitment interaction when entered
+- [ ] Add Rally / Recruitment tile
+- [ ] Render Rally tile
+- [ ] Open recruitment interaction
 - [ ] Offer at least one unit type
-- [ ] Add recruits to the run roster
-- [ ] Support reinforcing an existing squad
-- [ ] Support recruiting a unit type not currently owned
-- [ ] Mark consumed one-use Rally locations as resolved
-- [ ] Prevent collecting the same recruitment reward repeatedly
+- [ ] Add recruits to roster
+- [ ] Reinforce existing squad
+- [ ] Recruit new unit type
+- [ ] New type becomes eligible Creature card in future combat deck
+- [ ] Mark one-use Rally resolved
+- [ ] Prevent repeated collection
 - [ ] Add recruitment tests
-
-Keep the first implementation deterministic and simple.
-
-Do not implement faction reputation or complex recruitment tables yet.
-
-Success condition:
-
-> Exploration can directly increase or diversify the player's combat army.
 
 ---
 
 ## 0.7.4 Shops
 
-Add a simple exploration shop that turns Gold into meaningful run progression.
+First shop may sell Recruits and Spell cards.
 
-The first shop may sell:
-
-```text
-Recruits
-Spells
-```
-
-Example:
-
-```text
-TRAVELLING MERCHANT
-
-Guardian ×2
-Cost: 4 Gold
-
-Firebolt
-Cost: 3 Gold
-
-Frost Ward
-Cost: 3 Gold
-```
-
-Keep initial inventories deliberately small.
-
-- [ ] Add Shop exploration tile/location
+- [ ] Add Shop tile/location
 - [ ] Create shop inventory model independent from Phaser
-- [ ] Generate deterministic/fixed MVP shop inventory
-- [ ] Support recruit offers
-- [ ] Support spell offers
-- [ ] Display Gold while shopping
-- [ ] Prevent purchase when Gold is insufficient
+- [ ] Deterministic/fixed MVP inventory
+- [ ] Recruit offers
+- [ ] Spell-card offers
+- [ ] Display Gold
+- [ ] Reject insufficient Gold
 - [ ] Deduct Gold only after successful purchase
-- [ ] Add purchased recruits to roster
-- [ ] Add purchased spells to run spell collection/deck
-- [ ] Remove or mark one-time offers after purchase where appropriate
+- [ ] Purchased recruits update roster
+- [ ] Purchased Spells update run collection
+- [ ] Remove/mark purchased one-time offers
 - [ ] Add shop tests
-
-Do not add:
-- rerolls;
-- rarity systems;
-- discounts;
-- reputation;
-- complex procedural pricing;
-
-until the basic economy proves interesting.
-
-Success condition:
-
-> Gold collected during exploration can be converted into new tactical options before future battles.
 
 ---
 
-## 0.7.5 Spell Collection During a Run
+## 0.7.5 Combat Card Collection During a Run
 
-The player's combat spell deck evolves during exploration.
+- [ ] Store acquired Spell cards in RunState
+- [ ] Build combat deck from roster Creature cards + owned Spell cards
+- [ ] Purchased spells affect future combat decks
+- [ ] Add at least one non-shop Spell reward source
+- [ ] Define duplicate Spell policy
+- [ ] Preserve cards between days
+- [ ] Display owned card collection during exploration
+- [ ] Reuse same card art/content registry in combat and exploration
+- [ ] Add acquisition tests
 
-Spells may be obtained from:
-
-```text
-shops
-magical locations
-events
-combat rewards later
-```
-
-For the MVP, Shops plus one exploration reward source are enough.
-
-Example:
-
-```text
-Current deck:
-Firebolt
-Barrier
-Battle Cry
-
-Find:
-Chain Lightning
-
-New deck:
-Firebolt
-Barrier
-Battle Cry
-Chain Lightning
-```
-
-- [ ] Store acquired player spells in run state
-- [ ] Connect run spell collection to the combat spell deck
-- [ ] Add purchased spells to the run deck
-- [ ] Add at least one non-shop exploration source of a spell
-- [ ] Define whether duplicate spells are allowed in the MVP
-- [ ] Preserve acquired spells between days
-- [ ] Preserve acquired spells between exploration and combat
-- [ ] Display owned spell collection during exploration
-- [ ] Add spell-acquisition tests
-
-Keep deck management minimal initially.
-
-Do not add:
-- deck size optimization screens;
-- sideboards;
-- card crafting;
-- card upgrading;
-- rarity;
-
-until the basic draw/play loop is validated.
-
-Success condition:
-
-> Exploring the map changes the tactical spell options available in future combats.
+Do not add deck-building screens, rarity, crafting, upgrades or sideboards before the mixed-deck loop is validated.
 
 ---
 
 ## 0.7.6 Exploration Reward Choices
 
-Introduce simple reward choices where useful.
-
-Example:
-
-```text
-You discover survivors and an abandoned grimoire.
-
-Choose one:
-
-Guardians ×3
-
-OR
-
-Firebolt
-```
-
-This should remain a lightweight reusable system.
-
-- [ ] Create simple exploration reward-choice model
-- [ ] Support unit recruitment reward
-- [ ] Support spell reward
-- [ ] Support Gold reward
-- [ ] Support exploration Mana reward
-- [ ] Present 2 simple choices when appropriate
-- [ ] Apply exactly one selected reward
-- [ ] Prevent collecting both choices
+- [ ] Create reward-choice model
+- [ ] Unit recruitment reward
+- [ ] Spell-card reward
+- [ ] Gold reward
+- [ ] Exploration Mana reward
+- [ ] Present 2 simple choices where appropriate
+- [ ] Apply exactly one reward
+- [ ] Prevent collecting both
 - [ ] Add reward-choice tests
-
-Use reward choices sparingly.
-
-Not every map tile needs a modal.
-
-Success condition:
-
-> Exploration occasionally asks the player to choose between army growth, spell options, and economy.
 
 ---
 
 ## 0.7.7 Exploration Visual Content
 
-Units and spells shown during exploration must reuse the same content definitions and PNG assets used by combat.
-
-Do not build a second exploration-only image registry.
-
-- [ ] Render unit PNGs in the exploration roster
-- [ ] Render unit PNGs in Rally / Recruitment offers
-- [ ] Render unit PNGs in Shop recruit offers
-- [ ] Render spell PNGs in Shop spell offers
-- [ ] Render spell PNGs in exploration reward choices
-- [ ] Render spell PNGs in the owned spell collection
-- [ ] Use fallback assets when content artwork is unavailable
-- [ ] Keep dynamic information as UI text, not baked into PNGs
-- [ ] Verify the same asset key can be used across combat and exploration
-
-Success condition:
-
-> Recruits and spells are visually recognizable everywhere they appear, using one replaceable content-asset system.
+- [ ] Render Creature/unit artwork in roster
+- [ ] Render unit artwork in Rally offers
+- [ ] Render unit artwork in Shop recruit offers
+- [ ] Render Spell artwork in Shop offers
+- [ ] Render Spell artwork in rewards
+- [ ] Render Spell artwork in owned collection
+- [ ] Provide fallback assets
+- [ ] Never bake dynamic stats into artwork
+- [ ] Verify one asset key works across combat/exploration
 
 ---
 
 ## 0.7.8 Exploration Collection Review
 
-Before adding more exploration content, review the loop:
-
-```text
-Explore
-↓
-Collect Gold / resources
-↓
-Find recruits
-↓
-Find / buy spells
-↓
-Improve roster and deck
-↓
-End Day
-↓
-Fight Duskborn
-↓
-Survive
-↓
-Explore again
-```
-
-Review:
-
 - [ ] Does finding recruits feel valuable?
-- [ ] Does reinforcing an existing squad compete with gaining a new unit type?
-- [ ] Are spell rewards exciting without overwhelming the player?
+- [ ] Does reinforcing compete with gaining a new type?
+- [ ] Are Spell rewards exciting without overwhelming player?
 - [ ] Does Gold create interesting shop decisions?
-- [ ] Are Rally locations meaningfully different from Shops?
-- [ ] Does exploration materially change the next combat?
-- [ ] Is the current roster easy to understand?
-- [ ] Is the current spell collection easy to understand?
-- [ ] Are there enough choices without turning exploration into menu management?
-
-Success condition:
-
-> The player explores because the map contains meaningful ways to build the army and spell deck needed to survive future nights.
+- [ ] Are Rally locations different from Shops?
+- [ ] Does exploration change next mixed combat deck?
+- [ ] Is roster easy to understand?
+- [ ] Is card collection easy to understand?
+- [ ] Are there enough choices without menu overload?
 
 ---
 
@@ -2178,27 +1279,11 @@ Success condition:
 - [ ] Add Might stat
 - [ ] Add Magic stat
 - [ ] Display Might and Magic
-- [ ] Add at least one way to gain Might during a run
-- [ ] Add at least one way to gain Magic during a run
+- [ ] Add at least one way to gain Might during run
+- [ ] Add at least one way to gain Magic during run
 - [ ] Make Might influence combat
 - [ ] Make Magic influence at least one gameplay outcome
 - [ ] Add progression tests
-
-Consider later whether Might influences:
-- unit effectiveness;
-- recruitment quality;
-- squad progression;
-
-and whether Magic influences:
-- max Combat Mana;
-- spell acquisition;
-- spell effects;
-
-but keep the first implementation simple.
-
-Success condition:
-
-> The player can begin forming different build directions.
 
 ---
 
@@ -2210,14 +1295,10 @@ Success condition:
 - [ ] Add one Might-oriented event
 - [ ] Add one Magic-oriented event
 - [ ] Add one Economy-oriented event
-- [ ] Add at least one event that can reward recruits
-- [ ] Add at least one event that can reward a spell
+- [ ] Add at least one event rewarding recruits
+- [ ] Add at least one event rewarding a Spell card
 - [ ] Apply event results
 - [ ] Add event tests
-
-Success condition:
-
-> Exploration includes strategic choices rather than only collecting resources.
 
 ---
 
@@ -2229,10 +1310,6 @@ Success condition:
 - [ ] Add defeat condition
 - [ ] Add basic run summary
 
-Success condition:
-
-> A complete run can be won or lost.
-
 ---
 
 # 0.11 Artifacts During a Run
@@ -2242,28 +1319,9 @@ Success condition:
 - [ ] Add Traveler Boots
 - [ ] Add Apprentice Crystal
 - [ ] Add Captain Banner
-- [ ] Add simple reusable effect handling where needed
+- [ ] Add reusable effect handling where needed
 - [ ] Add artifact reward choice
 - [ ] Add artifact tests
-
-Possible initial effects:
-
-```text
-Traveler Boots
-+1 daily action
-
-Apprentice Crystal
-+1 Magic
-
-Captain Banner
-+3 Army
-```
-
-As the typed roster becomes authoritative, re-evaluate generic `+Army` effects so artifacts can eventually reinforce typed squads or recruitment systems instead of maintaining duplicate army concepts.
-
-Success condition:
-
-> Artifacts noticeably change how a run plays.
 
 ---
 
@@ -2278,10 +1336,6 @@ Success condition:
 - [ ] Add starting artifact slots
 - [ ] Add tests
 
-Success condition:
-
-> Persistent progression exists independently from the current run.
-
 ---
 
 # 0.13 XP After Run
@@ -2291,17 +1345,6 @@ Success condition:
 - [ ] Add XP to MetaState
 - [ ] Detect level-up
 - [ ] Add tests
-
-Possible early XP formula:
-
-```text
-Base XP
-+ days survived
-+ combat victories
-+ boss bonus
-```
-
-Keep balancing intentionally simple.
 
 ---
 
@@ -2314,16 +1357,7 @@ Keep balancing intentionally simple.
 - [ ] Prevent duplicate unlocks
 - [ ] Add unlock tests
 
-Later unlock categories may include:
-- new unit types;
-- new spells;
-- new shop/reward content;
-
-but do not expand unlock scope until the core run loop is validated.
-
-Success condition:
-
-> Finishing runs expands future strategic possibilities.
+Later unlock categories may include new unit types and Spell cards.
 
 ---
 
@@ -2335,12 +1369,8 @@ Success condition:
 - [ ] Apply artifact when creating RunState
 - [ ] Verify Traveler Boots changes daily actions
 - [ ] Verify Apprentice Crystal changes starting Magic
-- [ ] Verify Captain Banner changes starting Army or its eventual typed-roster equivalent
+- [ ] Verify Captain Banner changes starting Army or typed-roster equivalent
 - [ ] Add tests
-
-Success condition:
-
-> Previous runs can meaningfully influence how the next run begins.
 
 ---
 
@@ -2353,10 +1383,6 @@ Success condition:
 - [ ] Add save version field
 - [ ] Add save tests
 
-Success condition:
-
-> XP and unlocks remain after restarting the game.
-
 ---
 
 # 0.17 Loot Pool Unlocks
@@ -2365,48 +1391,106 @@ Success condition:
 - [ ] Filter loot pool using MetaState
 - [ ] Keep locked loot unavailable
 - [ ] Make unlocked loot eligible
-- [ ] Support future unit/spell unlocks without duplicating loot filtering rules
+- [ ] Support future Creature/Spell card unlocks without duplicated filtering rules
 - [ ] Add tests
-
-Success condition:
-
-> Meta progression can change what may appear inside future runs.
 
 ---
 
 # 0.18 Prototype Review
 
-Do not automatically implement more content.
-
-Review:
+Review only after the combat investment gate and exploration growth loop are playable.
 
 - [ ] Is exploration interesting?
 - [ ] Are 3 actions per day enough?
 - [ ] Does End Day create tension?
 - [ ] Is mandatory Duskborn combat enjoyable?
 - [ ] Does per-turn squad positioning create meaningful choices?
-- [ ] Does spell draw and Mana allocation create meaningful choices?
+- [ ] Does mixed Creature/Spell draw create meaningful choices?
+- [ ] Does visible Spell hand improve anticipation/planning?
+- [ ] Does Creature bench add agency rather than clutter?
 - [ ] Does Might vs Magic create real build directions?
 - [ ] Is Economy worth investing in?
 - [ ] Are Shops useful without dominating exploration?
 - [ ] Are Rally locations exciting?
-- [ ] Does acquiring new spells change combat decisions?
-- [ ] Does recruiting/reinforcing units change combat decisions?
-- [ ] Are unit and spell images readable and easy to replace?
+- [ ] Does acquiring new Spell cards change decisions?
+- [ ] Does recruiting/reinforcing units change decisions?
+- [ ] Are card/unit images readable and easy to replace?
+- [ ] Does combat look like a game rather than a debug prototype?
 - [ ] Do artifacts change decisions?
 - [ ] Does meta progression make another run attractive?
 - [ ] Are runs too long?
-- [ ] Is the UI understandable?
+- [ ] Is UI understandable without implementation terminology?
 
-Only after this review should scope expand.
+---
+
+# Asset Production Reference
+
+This section is the replacement contract for placeholder and production artwork.
+
+## Card assets
+
+```text
+card frame: 768 x 1080 PNG, RGBA, transparent
+card back: 768 x 1080 PNG
+artwork master: 1024 x 1024 PNG, subject inside central 80%
+Mana/type/status icons: 256 x 256 PNG transparent
+```
+
+Recommended paths:
+
+```text
+public/assets/cards/frames/creature-frame.png
+public/assets/cards/frames/spell-frame.png
+public/assets/cards/card-back.png
+public/assets/cards/art/guardian.png
+public/assets/cards/art/archer.png
+public/assets/cards/art/firebolt.png
+public/assets/cards/art/barrier.png
+public/assets/cards/art/battle-cry.png
+```
+
+## Board assets
+
+```text
+unit portrait/token: 512 x 512 PNG transparent
+hero portrait: 1024 x 1024 PNG
+HUD icon: 256 x 256 PNG transparent
+```
+
+Recommended paths:
+
+```text
+public/assets/units/guardian.png
+public/assets/units/archer.png
+public/assets/units/duskborn-brute.png
+public/assets/units/duskborn-archer.png
+public/assets/ui/icons/
+public/assets/ui/frames/
+```
+
+## UI panel assets
+
+Prefer 9-slice-capable textures where practical.
+
+```text
+panel/button source: 512 x 256 or 512 x 512 PNG RGBA
+keep corners/borders visually stable under scaling
+```
+
+## VFX assets
+
+Prefer procedural Phaser particles/tweens first. When textures are useful:
+
+```text
+single effect texture: 256 x 256 or 512 x 512 PNG RGBA
+spritesheet frame: 256 x 256 or 512 x 512
+```
+
+Never encode gameplay values into visual assets.
 
 ---
 
 # Future Ideas — Not Yet Scheduled
-
-These are intentionally not roadmap commitments.
-
-Possible future systems:
 
 ```text
 More Duskborn types
@@ -2427,15 +1511,15 @@ Difficulty levels
 Daily modifiers
 Achievements
 Run seeds
-Deck / spell drafting
-Spell rarity
+Deck construction UI
+Card rarity
 Card upgrades
 Faction recruitment
 Shop rerolls
 Procedural shop inventories
 Equipment
-Animated unit portraits
-VFX / SFX
+Animated portraits
+Full SFX/music production
 ```
 
 Implement only when the validated core loop justifies them.
