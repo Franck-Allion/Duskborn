@@ -12,6 +12,7 @@ import {
   isSideDeploymentValid,
   getUncoveredOpponentColumns,
   getAvailableAbilitiesForUnitType,
+  applyCombatVictoryToRunState,
   beginTurn,
   confirmDeployment,
   canRepositionSquad,
@@ -23,6 +24,9 @@ import {
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 import { CombatActionPanel } from '../ui/CombatActionPanel';
+import { commitPlayerAttack, canReturnToMap } from '../game/combat/CombatInteraction';
+import { combatPhaseLabel, squadName, partialHpLabel } from '../ui/combatPresentation';
+import { ABILITY_REGISTRY } from '../game/content/abilities';
 
 export class CombatScene extends Phaser.Scene {
   private runState!: RunState;
@@ -44,6 +48,10 @@ export class CombatScene extends Phaser.Scene {
   private actionPanel!: CombatActionPanel;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
+  private turnText!: Phaser.GameObjects.Text;
+  private manaText!: Phaser.GameObjects.Text;
+  private selectionText!: Phaser.GameObjects.Text;
+  private committingAttack = false;
 
   constructor() {
     super('combat');
@@ -150,7 +158,7 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX - 80, 490, 'PLAYER SIDE', {
+      .text(centerX - 80, 500, 'PLAYER SIDE', {
         fontFamily: 'monospace',
         fontSize: '18px',
         fontStyle: 'bold',
@@ -159,7 +167,7 @@ export class CombatScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.playerHpText = this.add
-      .text(centerX - 80, 515, 'HP: 100', {
+      .text(centerX - 80, 524, 'HP: 100', {
         fontFamily: 'monospace',
         fontSize: '16px',
         fontStyle: 'bold',
@@ -175,7 +183,21 @@ export class CombatScene extends Phaser.Scene {
         color: '#e2e8f0', // slate-200
       })
       .setOrigin(0.5);
-    this.actionPanel = new CombatActionPanel(this, () => this.refreshDeploymentUI());
+    this.turnText = this.add.text(620, 28, '', {
+      fontFamily: 'monospace', fontSize: '14px', color: '#e2e8f0',
+    });
+    this.manaText = this.add.text(620, 70, '', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#93c5fd',
+    });
+    this.selectionText = this.add.text(148, 463, '', {
+      fontFamily: 'monospace', fontSize: '11px', color: '#cbd5e1',
+    });
+    this.actionPanel = new CombatActionPanel(this,
+      () => this.refreshDeploymentUI(),
+      () => this.commitPlayerAttack(),
+      () => {
+        if (canReturnToMap(this.combatState, this.runState)) this.scene.start('map');
+      });
 
     // Grid measurements
     const startY = 122;
@@ -373,6 +395,15 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private refreshDeploymentUI(): void {
+    if (this.combatState.phase === 'VICTORY') {
+      applyCombatVictoryToRunState(this.combatState, this.runState);
+    }
+    this.turnText.setText(`${this.combatState.activeSide === 'player' ? 'YOUR TURN' : 'DUSKBORN TURN'}  |  Turn ${this.combatState.turn}\n${combatPhaseLabel(this.combatState)}`);
+    this.manaText.setText(`Mana ${this.combatState.playerMana.current} / ${this.combatState.playerMana.max}\nDuskborn Mana ${this.combatState.enemyMana.current} / ${this.combatState.enemyMana.max}`);
+    this.selectionText.setText(this.combatState.playerSquads.filter(s => s.count > 0).map(s => {
+      const selected = this.combatState.selectedPlayerAbilities[s.unitTypeId];
+      return `${squadName(s, this.runState)}: ${selected ? `Selected: ${ABILITY_REGISTRY.get(selected)?.name ?? selected}` : 'Select an ability'}`;
+    }).join('\n'));
     if (this.playerHpText && this.enemyHpText) {
       const playerShield = this.combatState.playerHeroShield ?? 0;
       const playerShieldStr = playerShield > 0 ? `  Shield: ${playerShield}` : '';
@@ -387,7 +418,8 @@ export class CombatScene extends Phaser.Scene {
     this.confirmButtonVisuals.forEach((visual) => visual.destroy());
     this.confirmButtonVisuals = [];
     this.sidebarTitle.setText(this.combatState.phase === 'DEPLOYMENT'
-      ? 'DEPLOY SQUADS' : this.combatState.phase === 'ACTION' ? 'PREPARE ATTACK' : 'ATTACK STATUS');
+      ? 'Squad positioning' : this.combatState.phase === 'ACTION'
+        ? 'Abilities & spells' : 'Battle status');
     // 1. Clear old squad markers on grid
     this.squadVisuals.forEach((v) => v.destroy());
     this.squadVisuals = [];
@@ -463,7 +495,7 @@ export class CombatScene extends Phaser.Scene {
 
     // Render player squads
     this.combatState.playerSquads.forEach((squad) => {
-      if (squad.position !== null) {
+      if (squad.count > 0 && squad.position !== null) {
         const { column, row } = squad.position;
         const screenX = startX + column * (CELL_SIZE + 8) + CELL_SIZE / 2;
         const screenY = getRowY(row);
@@ -472,11 +504,13 @@ export class CombatScene extends Phaser.Scene {
         const nameText = this.add
           .text(
             screenX,
-            screenY - 10,
-            squad.unitTypeId === 'guardian' ? 'Guard' : 'Arch',
+            screenY - 18,
+            squadName(squad, this.runState),
             {
               fontFamily: 'monospace',
-              fontSize: '12px',
+              fontSize: '9px',
+              align: 'center',
+              wordWrap: { width: 62 },
               fontStyle: 'bold',
               color: '#ffffff',
             },
@@ -485,9 +519,11 @@ export class CombatScene extends Phaser.Scene {
 
         // Count text
         const countText = this.add
-          .text(screenX, screenY + 10, `x${squad.count}`, {
+          .text(screenX, screenY + 9, `x${squad.count}\n${partialHpLabel(squad)}`, {
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '8px',
+            align: 'center',
+            wordWrap: { width: 62 },
             color: '#60a5fa', // blue-400
           })
           .setOrigin(0.5);
@@ -498,7 +534,7 @@ export class CombatScene extends Phaser.Scene {
 
     // Render enemy squads symmetrically
     this.combatState.enemySquads.forEach((squad) => {
-      if (squad.position !== null) {
+      if (squad.count > 0 && squad.position !== null) {
         const { column, row } = squad.position;
         const screenX = startX + column * (CELL_SIZE + 8) + CELL_SIZE / 2;
         const screenY = getRowY(row);
@@ -507,11 +543,13 @@ export class CombatScene extends Phaser.Scene {
         const nameText = this.add
           .text(
             screenX,
-            screenY - 10,
-            squad.unitTypeId === 'duskborn-brute' ? 'Brut' : 'Arch',
+            screenY - 18,
+            squadName(squad),
             {
               fontFamily: 'monospace',
-              fontSize: '12px',
+              fontSize: '9px',
+              align: 'center',
+              wordWrap: { width: 62 },
               fontStyle: 'bold',
               color: '#ffffff',
             },
@@ -520,9 +558,11 @@ export class CombatScene extends Phaser.Scene {
 
         // Count text
         const countText = this.add
-          .text(screenX, screenY + 10, `x${squad.count}`, {
+          .text(screenX, screenY + 9, `x${squad.count}\n${partialHpLabel(squad)}`, {
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '8px',
+            align: 'center',
+            wordWrap: { width: 62 },
             color: '#f87171', // red-400
           })
           .setOrigin(0.5);
@@ -531,11 +571,11 @@ export class CombatScene extends Phaser.Scene {
       }
     });
 
-    if (this.combatState.phase !== 'DEPLOYMENT') {
-      this.deploymentHint.setText(this.combatState.phase === 'ACTION'
+    if (!this.canPlayerDeploy()) {
+      this.deploymentHint.setText(this.combatState.phase === 'ACTION' && this.combatState.activeSide === 'player'
         ? 'Choose squad abilities and spells, then confirm your attack.'
-        : 'Attack confirmed / Resolution pending');
-      this.actionPanel.render(this.combatState);
+        : combatPhaseLabel(this.combatState));
+      this.actionPanel.render(this.combatState, this.runState);
       this.refreshPlacementFeedback();
       const resolution = Math.max(1, Math.ceil(this.cameras.main.zoom));
       for (const visual of this.squadVisuals) {
@@ -739,6 +779,19 @@ export class CombatScene extends Phaser.Scene {
     ]) {
       if (visual instanceof Phaser.GameObjects.Text)
         visual.setResolution(resolution);
+    }
+  }
+
+  /** One commitment boundary; instantaneous today, ready for later presentation work. */
+  private commitPlayerAttack(): boolean {
+    if (this.committingAttack) return false;
+    this.committingAttack = true;
+    try {
+      const committed = commitPlayerAttack(this.combatState);
+      this.refreshDeploymentUI();
+      return committed;
+    } finally {
+      this.committingAttack = false;
     }
   }
 

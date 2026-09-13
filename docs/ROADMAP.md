@@ -1018,17 +1018,17 @@ The player should never need to understand internal state-machine transitions in
 
 Display permanently:
 
-* [ ] active side
-* [ ] current combat turn
-* [ ] current combat phase using player-friendly wording
-* [ ] player hero HP
-* [ ] enemy hero HP
-* [ ] hero shields when active
-* [ ] player current / max Mana
-* [ ] enemy Mana where useful
-* [ ] squad count and current partial-unit HP
-* [ ] unit-type level where relevant
-* [ ] selected ability per player squad
+* [x] active side
+* [x] current combat turn
+* [x] current combat phase using player-friendly wording
+* [x] player hero HP
+* [x] enemy hero HP
+* [x] hero shields when active
+* [x] player current / max Mana
+* [x] enemy Mana where useful
+* [x] squad count and current partial-unit HP
+* [x] unit-type level where relevant
+* [x] selected ability per player squad
 
 Avoid presenting implementation terminology such as `RESOLUTION` as an action the player must manually advance.
 
@@ -1058,12 +1058,12 @@ VICTORY / DEFEAT
 → result panel
 ```
 
-* [ ] Remove any player-facing "Resolve Attack" / "Continue Resolution" button
-* [ ] Confirm Attack immediately commits the prepared attack
-* [ ] Automatically begin visual resolution after confirmation
-* [ ] Automatically transition after completed visual resolution when combat is still ongoing
-* [ ] Keep domain phase transitions authoritative
-* [ ] Prevent UI controls from exposing internal orchestration steps
+* [x] Remove any player-facing "Resolve Attack" / "Continue Resolution" button
+* [x] Confirm Attack immediately commits the prepared attack
+* [x] Automatically begin visual resolution after confirmation
+* [x] Automatically transition after completed visual resolution when combat is still ongoing
+* [x] Keep domain phase transitions authoritative
+* [x] Prevent UI controls from exposing internal orchestration steps
 
 Success condition:
 

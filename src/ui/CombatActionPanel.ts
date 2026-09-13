@@ -1,29 +1,34 @@
 import Phaser from 'phaser';
 import {
   canConfirmAttack,
-  confirmAttack,
   playSpell,
   tryUseAbility,
-  resolveActiveSideAttack,
-  endTurn,
-  applyCombatVictoryToRunState,
+  chooseUnitTypeAbilityUnlock,
   getEffectiveAbilitiesForUnitType,
   type CombatState,
 } from '../game/combat/CombatState';
-import { orchestrateAutomaticPhases } from '../game/combat/EnemyTurnAI';
+import { canReturnToMap } from '../game/combat/CombatInteraction';
 import type { RunState } from '../game/core/RunState';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
 import { SPELL_REGISTRY } from '../game/content/spells';
 import { UNIT_REGISTRY } from '../game/content/unitTypes';
+import {
+  abilityEffectLabel,
+  combatPhaseLabel,
+  squadName,
+} from './combatPresentation';
 
-/** Compact phase-driven controls. Domain operations own all action legality. */
+/** Phase-specific controls only; permanent tactical information belongs to the scene. */
 export class CombatActionPanel {
   private visuals: Phaser.GameObjects.GameObject[] = [];
   private handPage = 0;
+  private squadPage = 0;
 
   constructor(
     private scene: Phaser.Scene,
     private refresh: () => void,
+    private commitAttack: () => boolean,
+    private returnToMap: () => void,
   ) {}
 
   clear(): void {
@@ -31,28 +36,42 @@ export class CombatActionPanel {
     this.visuals = [];
   }
 
-  render(state: CombatState): void {
+  render(state: CombatState, run: RunState): void {
     this.clear();
-    const player = state.activeSide === 'player';
-    const interactive = player && state.phase === 'ACTION';
-    const squads = (player ? state.playerSquads : state.enemySquads).filter(
-      (s) => s.count > 0,
-    );
-    const selections = player
-      ? state.selectedPlayerAbilities
-      : state.selectedEnemyAbilities;
-    const mana = player ? state.playerMana : state.enemyMana;
-    let y = 140;
-    this.text(y, `Mana: ${mana.current} / ${mana.max}`, '#93c5fd');
-    y += 24;
-    for (const squad of squads) {
-      const unit = UNIT_REGISTRY.get(squad.unitTypeId);
-      this.text(y, `${unit?.name ?? squad.unitTypeId} x${squad.count}`);
-      y += 20;
-      const selected = selections[squad.unitTypeId];
-      if (interactive && selected === undefined) {
-        const allowedAbilities = getEffectiveAbilitiesForUnitType(state, 'player', squad.unitTypeId);
-        for (const id of allowedAbilities) {
+    if (state.phase === 'VICTORY' || state.phase === 'DEFEAT') {
+      this.renderResult(state, run);
+      return;
+    }
+    if (!this.canPlayerAct(state)) {
+      this.text(155, combatPhaseLabel(state), '#94a3b8');
+      return;
+    }
+
+    // Browsing is presentation state; selections and availability come from the domain.
+    const squads = state.playerSquads.filter((s) => s.count > 0);
+    this.squadPage = Math.min(this.squadPage, Math.max(0, squads.length - 1));
+    const squad = squads[this.squadPage];
+    if (squad) {
+      this.text(145, squadName(squad, run));
+      if (squads.length > 1)
+        this.button(
+          165,
+          `Squad ${this.squadPage + 1}/${squads.length} - Next`,
+          () => {
+            if (!this.canPlayerAct(state)) return;
+            this.squadPage = (this.squadPage + 1) % squads.length;
+            this.refresh();
+          },
+        );
+      const selected = state.selectedPlayerAbilities[squad.unitTypeId];
+      if (selected === undefined) {
+        this.text(192, 'Select an ability', '#94a3b8');
+        let y = 212;
+        for (const id of getEffectiveAbilitiesForUnitType(
+          state,
+          'player',
+          squad.unitTypeId,
+        )) {
           const ability = ABILITY_REGISTRY.get(id);
           if (!ability) continue;
           this.button(y, `${ability.name} (${ability.manaCost} Mana)`, () => {
@@ -71,109 +90,118 @@ export class CombatActionPanel {
         }
       } else {
         this.text(
-          y,
-          `Selected: ${ABILITY_REGISTRY.get(selected)?.name ?? 'None'}`,
+          200,
+          `Selected: ${ABILITY_REGISTRY.get(selected)?.name ?? selected}`,
           '#86efac',
         );
-        y += 46;
+        this.text(238, 'Locked for this turn.', '#94a3b8');
       }
-      y += 8;
     }
 
-    if (interactive) {
-      this.text(y, 'Spell hand');
-      y += 21;
-      const hand = state.playerDeck.hand;
-      const pages = Math.max(1, Math.ceil(hand.length / 3));
-      this.handPage = Math.min(this.handPage, pages - 1);
-      for (const id of hand.slice(this.handPage * 3, this.handPage * 3 + 3)) {
-        const spell = SPELL_REGISTRY.get(id);
-        this.button(
-          y,
-          `${spell?.name ?? id} (${spell?.manaCost ?? '?'} Mana)`,
-          () => {
-            if (!this.canPlayerAct(state)) return;
-            const success = playSpell(state, 'player', id);
-            this.refresh();
-            if (!success)
-              this.feedback('Spell unavailable / insufficient Mana.');
-          },
-        );
-        y += 23;
-      }
-      if (hand.length === 0) this.text(y, 'No spells in hand', '#94a3b8');
-      if (pages > 1) {
-        this.button(y, `Hand ${this.handPage + 1}/${pages} - Next`, () => {
-          if (!this.canPlayerAct(state)) return;
-          this.handPage = (this.handPage + 1) % pages;
-          this.refresh();
-        });
-      }
+    this.text(313, 'Spell hand');
+    const hand = state.playerDeck.hand;
+    const pages = Math.max(1, Math.ceil(hand.length / 3));
+    this.handPage = Math.min(this.handPage, pages - 1);
+    let y = 335;
+    for (const id of hand.slice(this.handPage * 3, this.handPage * 3 + 3)) {
+      const spell = SPELL_REGISTRY.get(id);
       this.button(
-        470,
-        'Confirm Attack',
+        y,
+        `${spell?.name ?? id} (${spell?.manaCost ?? '?'} Mana)`,
         () => {
           if (!this.canPlayerAct(state)) return;
-          if (confirmAttack(state)) this.refresh();
-          else this.feedback('Select an ability for every surviving squad.');
+          const success = playSpell(state, 'player', id);
+          this.refresh();
+          if (!success) this.feedback('Spell unavailable / insufficient Mana.');
         },
-        canConfirmAttack(state) ? 0xea580c : 0x334155,
+      );
+      y += 23;
+    }
+    if (!hand.length) this.text(y, 'No spells in hand', '#94a3b8');
+    if (pages > 1)
+      this.button(410, `Hand ${this.handPage + 1}/${pages} - Next`, () => {
+        if (!this.canPlayerAct(state)) return;
+        this.handPage = (this.handPage + 1) % pages;
+        this.refresh();
+      });
+    this.button(
+      470,
+      'Confirm Attack',
+      () => {
+        if (!this.canPlayerAct(state)) return;
+        if (!this.commitAttack())
+          this.feedback('Select an ability for every surviving squad.');
+      },
+      canConfirmAttack(state) ? 0xea580c : 0x334155,
+    );
+  }
+
+  private renderResult(state: CombatState, run: RunState): void {
+    const victory = state.phase === 'VICTORY';
+    const bg = this.scene.add
+      .rectangle(810, 290, 220, 300, 0x172033)
+      .setStrokeStyle(2, victory ? 0x4ade80 : 0xf87171);
+    this.visuals.push(bg);
+    this.text(
+      155,
+      victory ? 'VICTORY' : 'DEFEAT',
+      victory ? '#4ade80' : '#f87171',
+    );
+    if (!victory) {
+      this.text(195, 'Your hero has fallen.\nThe run is over.', '#fca5a5');
+      return;
+    }
+    const choice = run.pendingAbilityUnlockChoices?.[0];
+    if (choice) {
+      const unit = UNIT_REGISTRY.get(choice.unitTypeId);
+      const level = run.unitTypeProgression?.[choice.unitTypeId]?.level;
+      this.text(
+        185,
+        `${unit?.name ?? choice.unitTypeId} Lv.${level ?? 1} - Level Up`,
+        '#86efac',
+      );
+      this.text(220, 'Choose a new ability:');
+      let y = 250;
+      for (const id of choice.options) {
+        const ability = ABILITY_REGISTRY.get(id);
+        if (!ability) continue;
+        this.button(y, `${ability.name} (${ability.manaCost} Mana)`, () => {
+          if (
+            state.phase !== 'VICTORY' ||
+            run.pendingAbilityUnlockChoices?.[0] !== choice
+          )
+            return;
+          const success = chooseUnitTypeAbilityUnlock(
+            run,
+            choice.unitTypeId,
+            id,
+          );
+          this.refresh();
+          if (!success) this.feedback('That ability choice is unavailable.');
+        });
+        this.text(y + 25, abilityEffectLabel(ability), '#cbd5e1');
+        y += 80;
+      }
+      this.text(
+        445,
+        `${run.pendingAbilityUnlockChoices.length} choice(s) remaining`,
+        '#94a3b8',
       );
     } else {
-      if (state.phase === 'VICTORY') {
-        this.text(y, 'VICTORY!\n\nAll Duskborn threats in this lane are vanquished.', '#4ade80');
+      this.text(
+        200,
+        'The Duskborn are defeated.\nYour surviving squads are ready to return.',
+        '#cbd5e1',
+      );
+      if (canReturnToMap(state, run))
         this.button(
           470,
           'Return to Map',
           () => {
-            const runState = (this.scene as unknown as { runState: RunState }).runState;
-            applyCombatVictoryToRunState(state, runState);
-            this.scene.scene.start('map');
+            if (canReturnToMap(state, run)) this.returnToMap();
           },
           0x10b981,
         );
-      } else if (state.phase === 'DEFEAT') {
-        this.text(y, 'DEFEAT!\n\nYour hero has fallen in battle.', '#f87171');
-      } else if (state.activeSide === 'player') {
-        if (state.phase === 'RESOLUTION') {
-          this.button(
-            470,
-            'Resolve Attack',
-            () => {
-              if (resolveActiveSideAttack(state)) {
-                this.refresh();
-              }
-            },
-            0xea580c,
-          );
-        } else if (state.phase === 'TURN_END') {
-          this.button(
-            470,
-            'End Turn',
-            () => {
-              if (endTurn(state)) {
-                // Automatically orchestrate enemy's turn until control is handed back to player (or combat ends)
-                orchestrateAutomaticPhases(state);
-                this.refresh();
-              }
-            },
-            0x10b981, // green-500
-          );
-        } else {
-          this.text(
-            y,
-            `Phase: ${state.phase}`,
-            '#94a3b8',
-          );
-        }
-      } else {
-        // Enemy Turn (only visible if paused or for visual feedback)
-        this.text(
-          y,
-          `Duskborn Turn (Phase: ${state.phase})...`,
-          '#d97706',
-        );
-      }
     }
   }
 

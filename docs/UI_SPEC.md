@@ -271,15 +271,27 @@ the domain transition to ACTION and locks both interaction modes. Positions
 persist, and player interaction becomes available again on a later player
 DEPLOYMENT phase.
 
-During player ACTION, the sidebar shows current/max combat Mana, surviving
-squads' ability choices and locked selections, and clickable spell names with
-Mana costs. The hand uses pages of three cards when needed. Ability and spell
-clicks delegate to the domain and refresh Mana and hand state. A squad cannot
-change its selection during that turn. Confirm Attack rejects incomplete or
-invalid squad selections with a short hint; unused Mana and unplayed spells
-are allowed. Successful confirmation preserves selections and shows a read-only
-RESOLUTION status. Enemy ACTION is also read-only. Damage and spell effects
-are not resolved yet.
+The permanent combat HUD shows whose turn it is, the turn number, friendly
+phase wording, both heroes' HP and active shields, and both Mana pools. Board
+squads show their unit name, count, player unit-type level when available, and
+partial-unit HP only when damaged. Player ability selections stay visible below
+the board. Labels derive from combat and run state rather than UI copies.
+
+During Choose Actions, the sidebar browses surviving squads and their available
+abilities, including progression unlocks. A selection is locked for that turn.
+Spell names and Mana costs remain simple clickable controls, with pages of three
+when needed. Confirm Attack validates the prepared attack and automatically
+resolves it, then runs the existing Duskborn turn and returns player control if
+combat continues. There is no second resolution or end-turn confirmation.
+Resolution is currently instantaneous; no attack animations are implemented.
+Enemy turns and resolution offer no player controls.
+
+Victory and Defeat use separate result panels while the HUD stays visible.
+Victory finalizes survivor persistence and XP exactly once. Pending level-up
+choices are shown one at a time with ability names, Mana costs and effect text;
+each choice delegates to the existing unlock API. Return to Map becomes available
+only after all choices are resolved. Defeat is terminal and offers no unlocks
+or map-return control. The current 960x540 layout and responsive fitting remain.
 
 Pointer coordinates are converted through the camera, so these interactions
 remain aligned at different window sizes and screen pixel densities. Input
