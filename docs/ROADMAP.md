@@ -479,15 +479,15 @@ interface SpellCard extends CombatCardBase {
 
 For the MVP, each owned unit type contributes one Creature card to the combat deck. Recruiting more soldiers of an existing type increases that squad's count; it does not create a duplicate squad or duplicate Creature card unless explicitly redesigned later.
 
-- [ ] Create pure TypeScript `CombatCard` union
-- [ ] Create unified draw pile containing Creature + Spell cards
-- [ ] Preserve injectable/seeded RNG for tests while allowing random gameplay draw
-- [ ] Migrate current player spell deck into unified deck
-- [ ] Migrate Duskborn deck/equivalent
-- [ ] Preserve one-squad-per-unit-type invariant
-- [ ] Preserve useful spell discard semantics
-- [ ] Define Creature-card lifecycle separately from spell discard
-- [ ] Add unified-card model tests
+- [x] Create pure TypeScript `CombatCard` union
+- [x] Create unified draw pile containing Creature + Spell cards
+- [x] Preserve injectable/seeded RNG for tests while allowing random gameplay draw
+- [x] Migrate current player spell deck into unified deck
+- [x] Migrate Duskborn deck/equivalent
+- [x] Preserve one-squad-per-unit-type invariant
+- [x] Preserve useful spell discard semantics
+- [x] Define Creature-card lifecycle separately from spell discard
+- [x] Add unified-card model tests
 
 ---
 

@@ -11,6 +11,7 @@ import type { CombatPosition } from './CombatPosition';
 import type { Squad } from './Squad';
 import type { UnitType } from '../content/UnitType';
 import type { RunState } from '../core/RunState';
+import type { CombatDeckState } from './CombatCard';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
 import { ABILITY_REGISTRY } from '../content/abilities';
@@ -69,6 +70,8 @@ export interface CombatState {
   enemyMana: CombatMana;
   playerDeck: SpellDeckState;
   enemyDeck: SpellDeckState;
+  playerCombatDeck?: CombatDeckState;
+  enemyCombatDeck?: CombatDeckState;
   selectedPlayerAbilities: Record<string, string>;
   selectedEnemyAbilities: Record<string, string>;
   playerPlayedSpells?: string[];

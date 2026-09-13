@@ -30,6 +30,10 @@ import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 import { CombatActionPanel } from '../ui/CombatActionPanel';
 import { SpellHandView } from '../ui/SpellHandView';
 import { commitPlayerAttack, canReturnToMap } from '../game/combat/CombatInteraction';
+import {
+  createInitialPlayerCombatDeck,
+  createInitialEnemyCombatDeck,
+} from '../game/combat/CombatCard';
 import { combatPhaseLabel, squadName, partialHpLabel } from '../ui/combatPresentation';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
 
@@ -120,6 +124,16 @@ export class CombatScene extends Phaser.Scene {
       selectedPlayerAbilities: {},
       selectedEnemyAbilities: {},
     };
+
+    this.combatState.playerCombatDeck = createInitialPlayerCombatDeck(
+      this.combatState.playerSquads,
+      this.combatState.playerDeck.drawPile,
+    );
+    this.combatState.enemyCombatDeck = createInitialEnemyCombatDeck(
+      this.combatState.enemySquads,
+      this.combatState.enemyDeck.drawPile,
+    );
+
     this.combatState.participatingPlayerUnitTypeIds = this.combatState.playerSquads
       .filter((s) => s.count > 0)
       .map((s) => s.unitTypeId);
