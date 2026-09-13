@@ -9,8 +9,11 @@ export type CardVisualState =
   | 'DRAGGING'
   | 'DEPLOYED';
 
-export const CARD_WIDTH = 104;
-export const CARD_HEIGHT = 146.25;
+export const CARD_WIDTH = 122;       // Spell card normal width
+export const CARD_HEIGHT = 171.56;   // Spell card normal height
+
+export const CREATURE_CARD_WIDTH = 104;     // Creature card normal width
+export const CREATURE_CARD_HEIGHT = 146.25; // Creature card normal height
 
 export interface CardViewConfig {
   instanceId: string;
@@ -20,6 +23,9 @@ export interface CardViewConfig {
   manaCost?: number;
   count?: number;
   isDeployed?: boolean;
+  attack?: number;
+  hp?: number;
+  level?: number;
 }
 
 /**
@@ -54,9 +60,21 @@ export class CardView extends Phaser.GameObjects.Container {
   protected nameText!: Phaser.GameObjects.Text;
   protected rulesBg!: Phaser.GameObjects.Graphics;
   protected rulesText!: Phaser.GameObjects.Text;
+  protected playGlow!: Phaser.GameObjects.Graphics;
+
+  // Badges: Spell uses standard top-left badgeBg/badgeText.
+  // Creature uses 4 distinct tactical badges.
   protected badgeBg!: Phaser.GameObjects.Graphics;
   protected badgeText!: Phaser.GameObjects.Text;
-  protected playGlow!: Phaser.GameObjects.Graphics;
+
+  protected countBadgeBg!: Phaser.GameObjects.Graphics;
+  protected countBadgeText!: Phaser.GameObjects.Text;
+  protected levelBadgeBg!: Phaser.GameObjects.Graphics;
+  protected levelBadgeText!: Phaser.GameObjects.Text;
+  protected attackBadgeBg!: Phaser.GameObjects.Graphics;
+  protected attackBadgeText!: Phaser.GameObjects.Text;
+  protected hpBadgeBg!: Phaser.GameObjects.Graphics;
+  protected hpBadgeText!: Phaser.GameObjects.Text;
 
   protected visualState: CardVisualState = 'IDLE';
   protected widthVal: number;
@@ -78,13 +96,18 @@ export class CardView extends Phaser.GameObjects.Container {
   ) {
     super(scene, x, y);
     
-    this.widthVal = isBench ? 88 : CARD_WIDTH;
-    this.heightVal = isBench ? 123.75 : CARD_HEIGHT;
+    this.widthVal = isBench ? CREATURE_CARD_WIDTH : CARD_WIDTH;
+    this.heightVal = isBench ? CREATURE_CARD_HEIGHT : CARD_HEIGHT;
 
     this.setSize(this.widthVal, this.heightVal);
 
-    this.artBaseX = 0;
-    this.artBaseY = -this.heightVal * 0.16;
+    // Compute center of the artwork slot explicitly
+    const artX = -this.widthVal * 0.38;
+    const artY = -this.heightVal * 0.38;
+    const artW = this.widthVal * 0.76;
+    const artH = this.heightVal * 0.44;
+    this.artBaseX = artX + artW / 2;
+    this.artBaseY = artY + artH / 2;
 
     this.createHierarchy();
     this.setVisualState('IDLE');
@@ -102,6 +125,7 @@ export class CardView extends Phaser.GameObjects.Container {
   private createHierarchy(): void {
     const w = this.widthVal;
     const h = this.heightVal;
+    const isSpell = this.cardType === 'SPELL';
 
     // 1. Soft Rounded Drop Shadow
     this.shadow = this.scene.add.graphics();
@@ -118,7 +142,6 @@ export class CardView extends Phaser.GameObjects.Container {
 
     // 3. Base/Backing Plate
     this.backing = this.scene.add.graphics();
-    const isSpell = this.cardType === 'SPELL';
     // Procedural layered dark fantasy plate background
     const gradientTop = isSpell ? 0x111e38 : 0x221a15;
     const gradientBot = isSpell ? 0x0c0f1c : 0x14100d;
@@ -177,10 +200,17 @@ export class CardView extends Phaser.GameObjects.Container {
       this.artContainer.add(artG);
     }
 
-    // Apply geometry masking to the artwork container
+    // Apply geometry masking with a small 3px inner artwork safe margin
+    // This visually separates the art from the frame and guarantees zero bleeding
+    const inset = 3;
+    const maskX = artX + inset;
+    const maskY = artY + inset;
+    const maskW = artW - inset * 2;
+    const maskH = artH - inset * 2;
+
     const maskGraphics = this.scene.make.graphics({ x: this.x, y: this.y }, false);
     maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRoundedRect(artX, artY, artW, artH, 6);
+    maskGraphics.fillRoundedRect(maskX, maskY, maskW, maskH, 6);
     const mask = maskGraphics.createGeometryMask();
     this.artContainer.setMask(mask);
 
@@ -221,36 +251,38 @@ export class CardView extends Phaser.GameObjects.Container {
     const fontRes = Math.max(1, Math.ceil(this.scene.cameras.main.zoom));
     this.nameText = this.scene.add.text(0, h * 0.14, this.config.name, {
       fontFamily: 'Georgia, serif',
-      fontSize: `${this.isBench ? 8 : 9}px`,
+      fontSize: `${isSpell ? 11 : 10}px`,
       color: '#ffffff',
       fontStyle: 'bold',
     }).setOrigin(0.5).setResolution(fontRes);
     this.add(this.nameText);
 
-    // 8. Rules / Effect Panel Background
+    // 8. Rules / Effect Panel Background (only for spells, or creatures with text)
     this.rulesBg = this.scene.add.graphics();
     this.rulesBg.fillStyle(0x0a0f1d, 0.75); // Dark slate
-    this.rulesBg.fillRoundedRect(-w * 0.42, h * 0.26, w * 0.84, h * 0.20, 6);
+    this.rulesBg.fillRoundedRect(-w * 0.42, h * 0.24, w * 0.84, h * 0.22, 6);
     this.add(this.rulesBg);
 
     // 9. Rules Text
-    this.rulesText = this.scene.add.text(0, h * 0.36, this.config.description, {
+    const bodyFontSize = isSpell ? 9 : 8;
+    this.rulesText = this.scene.add.text(0, h * 0.35, this.config.description, {
       fontFamily: 'Arial, sans-serif',
-      fontSize: `${this.isBench ? 7 : 8}px`,
+      fontSize: `${bodyFontSize}px`,
       color: '#cbd5e1',
       wordWrap: { width: w * 0.78 },
       align: 'center',
     }).setOrigin(0.5).setResolution(fontRes);
     this.add(this.rulesText);
 
-    // 10. Badges (Top-left Mana cost for Spells, Bottom-left Count for Creatures)
+    // 10. Badges
+    const badgeFontRes = Math.max(1, Math.ceil(this.scene.cameras.main.zoom));
     this.badgeBg = this.scene.add.graphics();
     if (isSpell) {
       // Mana Gem badge in top-left
       this.badgeBg.fillStyle(0x1d4ed8, 1); // Blue gem
-      this.badgeBg.fillCircle(-w * 0.38, -h * 0.38, this.isBench ? 10 : 12);
+      this.badgeBg.fillCircle(-w * 0.38, -h * 0.38, 12);
       this.badgeBg.lineStyle(1.5, 0x60a5fa, 1);
-      this.badgeBg.strokeCircle(-w * 0.38, -h * 0.38, this.isBench ? 10 : 12);
+      this.badgeBg.strokeCircle(-w * 0.38, -h * 0.38, 12);
       this.add(this.badgeBg);
 
       this.badgeText = this.scene.add.text(
@@ -259,97 +291,78 @@ export class CardView extends Phaser.GameObjects.Container {
         String(this.config.manaCost ?? 0),
         {
           fontFamily: 'Georgia, serif',
-          fontSize: `${this.isBench ? 10 : 12}px`,
+          fontSize: '13px',
           color: '#ffffff',
           fontStyle: 'bold',
         },
-      ).setOrigin(0.5).setResolution(fontRes);
+      ).setOrigin(0.5).setResolution(badgeFontRes);
       this.add(this.badgeText);
     } else {
-      // Soldier count badge in bottom-left
-      this.badgeBg.fillStyle(0x451a03, 1); // bronze border shield
-      const bx = -w * 0.34;
-      const by = h * 0.34;
-      const br = this.isBench ? 8 : 10;
-      
-      this.badgeBg.fillCircle(bx, by, br);
-      this.badgeBg.lineStyle(1.5, 0xd97706, 1);
-      this.badgeBg.strokeCircle(bx, by, br);
-      this.add(this.badgeBg);
+      // CREATURE BADGES: Highly detailed, tactical, and clean stats layout
 
-      this.badgeText = this.scene.add.text(
-        bx,
-        by,
-        `x${this.config.count ?? 1}`,
-        {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: `${this.isBench ? 8 : 9}px`,
-          color: '#fcd34d', // yellow-300
-          fontStyle: 'bold',
-        },
-      ).setOrigin(0.5).setResolution(fontRes);
-      this.add(this.badgeText);
-    }
+      // A. Top-Left (Squad Count banner)
+      this.countBadgeBg = this.scene.add.graphics();
+      this.countBadgeBg.fillStyle(0x2563eb, 1); // Royal blue
+      this.countBadgeBg.fillCircle(-w * 0.38, -h * 0.38, 11);
+      this.countBadgeBg.lineStyle(1.5, 0x60a5fa, 1);
+      this.countBadgeBg.strokeCircle(-w * 0.38, -h * 0.38, 11);
+      this.add(this.countBadgeBg);
 
-    // Initialize native filters once lazily
-    this.applyPhaser4Filters();
-  }
+      this.countBadgeText = this.scene.add.text(-w * 0.38, -h * 0.38, `x${this.config.count ?? 1}`, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '9px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setResolution(badgeFontRes);
+      this.add(this.countBadgeText);
 
-  private applyPhaser4Filters(): void {
-    this.imageFilters = [];
-    try {
-      const targets = [this.frame, this.art].filter(
-        (t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image
-      );
+      // B. Top-Right (Level medallion)
+      this.levelBadgeBg = this.scene.add.graphics();
+      this.levelBadgeBg.fillStyle(0xd97706, 1); // Amber
+      this.levelBadgeBg.fillCircle(w * 0.38, -h * 0.38, 11);
+      this.levelBadgeBg.lineStyle(1.5, 0xfbbf24, 1);
+      this.levelBadgeBg.strokeCircle(w * 0.38, -h * 0.38, 11);
+      this.add(this.levelBadgeBg);
 
-      for (const img of targets) {
-        // 1. Enable filters system on image
-        if (typeof img.enableFilters === 'function') {
-          img.enableFilters();
-        }
+      this.levelBadgeText = this.scene.add.text(w * 0.38, -h * 0.38, `L${this.config.level ?? 1}`, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '9px',
+        color: '#fcd34d',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setResolution(badgeFontRes);
+      this.add(this.levelBadgeText);
 
-        // 2. Add Glow filter.
-        // We choose img.filters.external for Glow because an outer glow
-        // needs to extend beyond the image's bounding box/silhouette cleanly
-        // without being clipped by the internal texture container.
-        let glow: unknown = null;
-        const imgFilters = img.filters as unknown as {
-          external?: { addGlow?: () => unknown };
-          internal?: { addGlow?: () => unknown; addColorMatrix?: () => unknown };
-        };
-        if (imgFilters?.external && typeof imgFilters.external.addGlow === 'function') {
-          glow = imgFilters.external.addGlow();
-        } else if (imgFilters?.internal && typeof imgFilters.internal.addGlow === 'function') {
-          glow = imgFilters.internal.addGlow();
-        }
+      // C. Bottom-Left (Attack/Damage shield/sword)
+      this.attackBadgeBg = this.scene.add.graphics();
+      this.attackBadgeBg.fillStyle(0x991b1b, 1); // Deep red
+      this.attackBadgeBg.fillCircle(-w * 0.36, h * 0.36, 11);
+      this.attackBadgeBg.lineStyle(1.5, 0xfca5a5, 1);
+      this.attackBadgeBg.strokeCircle(-w * 0.36, h * 0.36, 11);
+      this.add(this.attackBadgeBg);
 
-        if (glow) {
-          (glow as { setActive: (v: boolean) => void }).setActive(false);
-        }
+      this.attackBadgeText = this.scene.add.text(-w * 0.36, h * 0.36, String(this.config.attack ?? 0), {
+        fontFamily: 'Georgia, serif',
+        fontSize: '11px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setResolution(badgeFontRes);
+      this.add(this.attackBadgeText);
 
-        // 3. Add ColorMatrix filter.
-        // We choose img.filters.internal for ColorMatrix because desaturation
-        // and brightness corrections are per-pixel calculations that are best done
-        // internally before any external rendering overlays are applied.
-        let colorMatrix: unknown = null;
-        if (imgFilters?.internal && typeof imgFilters.internal.addColorMatrix === 'function') {
-          colorMatrix = imgFilters.internal.addColorMatrix();
-        }
+      // D. Bottom-Right (HP shield/heart)
+      this.hpBadgeBg = this.scene.add.graphics();
+      this.hpBadgeBg.fillStyle(0x065f46, 1); // Deep emerald
+      this.hpBadgeBg.fillCircle(w * 0.36, h * 0.36, 11);
+      this.hpBadgeBg.lineStyle(1.5, 0x6ee7b7, 1);
+      this.hpBadgeBg.strokeCircle(w * 0.36, h * 0.36, 11);
+      this.add(this.hpBadgeBg);
 
-        if (colorMatrix) {
-          (colorMatrix as { setActive: (v: boolean) => void }).setActive(false);
-        }
-
-        if (img && glow && colorMatrix) {
-          this.imageFilters.push({
-            target: img,
-            glow: glow as CardImageFilters['glow'],
-            colorMatrix: colorMatrix as CardImageFilters['colorMatrix'],
-          });
-        }
-      }
-    } catch {
-      // Safe fallback if filters are unsupported by the renderer or Phaser version
+      this.hpBadgeText = this.scene.add.text(w * 0.36, h * 0.36, String(this.config.hp ?? 0), {
+        fontFamily: 'Georgia, serif',
+        fontSize: '11px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setResolution(badgeFontRes);
+      this.add(this.hpBadgeText);
     }
   }
 
@@ -416,17 +429,38 @@ export class CardView extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Updates dynamic card content (e.g. soldier counts, description texts, deployed states)
+   * Updates dynamic card content (e.g. soldier counts, description texts, deployed states, and tactical stats)
    * on the fly, instantly refreshing the actual GameObjects and text overlays.
    */
   public updateDynamicContent(dynamic: {
     count?: number;
     description?: string;
     isDeployed?: boolean;
+    hp?: number;
+    attack?: number;
+    level?: number;
   }): void {
     if (dynamic.count !== undefined) {
-      if (this.badgeText) {
-        this.badgeText.setText(this.cardType === 'CREATURE' ? `x${dynamic.count}` : String(dynamic.count));
+      if (this.countBadgeText) {
+        this.countBadgeText.setText(`x${dynamic.count}`);
+      }
+    }
+
+    if (dynamic.hp !== undefined) {
+      if (this.hpBadgeText) {
+        this.hpBadgeText.setText(String(dynamic.hp));
+      }
+    }
+
+    if (dynamic.attack !== undefined) {
+      if (this.attackBadgeText) {
+        this.attackBadgeText.setText(String(dynamic.attack));
+      }
+    }
+
+    if (dynamic.level !== undefined) {
+      if (this.levelBadgeText) {
+        this.levelBadgeText.setText(`L${dynamic.level}`);
       }
     }
 

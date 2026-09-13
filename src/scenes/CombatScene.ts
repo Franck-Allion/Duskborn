@@ -483,7 +483,7 @@ export class CombatScene extends Phaser.Scene {
     this.actionPanel.clear();
     this.spellHand.refresh(this.combatState);
     this.creatureBench.setSelectedSquadIndex(this.selectedSquadIndex);
-    this.creatureBench.refresh(this.combatState);
+    this.creatureBench.refresh(this.combatState, this.runState);
     this.confirmButtonVisuals.forEach((visual) => visual.destroy());
     this.confirmButtonVisuals = [];
     this.sidebarTitle.setText(this.combatState.phase === 'DEPLOYMENT'

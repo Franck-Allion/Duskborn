@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { CombatState } from '../game/combat/CombatState';
+import type { RunState } from '../game/core/RunState';
 import { UNIT_REGISTRY } from '../game/content/unitTypes';
 import { CreatureCardView } from './cards/CreatureCardView';
 import { type CardVisualState } from './cards/CardView';
@@ -43,11 +44,11 @@ export class CreatureBenchView {
     this.cardViews.forEach((view) => view.setVisible(visible));
   }
 
-  public render(state: CombatState): void {
-    this.refresh(state);
+  public render(state: CombatState, runState: RunState | null = null): void {
+    this.refresh(state, runState);
   }
 
-  public refresh(state: CombatState): void {
+  public refresh(state: CombatState, runState: RunState | null = null): void {
     this.currentState = state;
 
     if (!this.visible) {
@@ -55,14 +56,21 @@ export class CreatureBenchView {
       return;
     }
 
-    const creaturesInBench = state.playerCombatDeck?.creatureBench ?? [];
+    // Hide deployed Creature cards from the visual bench to resolve board duplication.
+    // Filter the creature bench so that we only display available creatures whose corresponding
+    // living squad has position === null (undeployed).
+    const creaturesInBench = (state.playerCombatDeck?.creatureBench ?? []).filter((card) => {
+      const squad = state.playerSquads.find((s) => s.unitTypeId === card.unitTypeId);
+      return squad ? squad.count > 0 && squad.position === null : true;
+    });
+
     const isPlayerTurn = state.activeSide === 'player';
     const phase = state.phase;
 
     const shouldDimBench = !isPlayerTurn;
     const isInteractive = isPlayerTurn && phase === 'DEPLOYMENT';
 
-    // 1. Reconcile and clean up removed cards
+    // 1. Reconcile and clean up removed cards (e.g. when card is deployed on grid)
     const currentInstanceIds = new Set(creaturesInBench.map((c) => c.instanceId));
     this.cardViews.forEach((view, instanceId) => {
       if (!currentInstanceIds.has(instanceId)) {
@@ -96,7 +104,7 @@ export class CreatureBenchView {
       140,    // centerX of bench tray
       465,    // baseY of bench tray
       230,    // availableWidth
-      true,   // isBench = true (smaller width 88)
+      true,   // isBench = true (smaller width 104 after card resizing)
     );
 
     creaturesInBench.forEach((creatureCard, index) => {
@@ -111,10 +119,25 @@ export class CreatureBenchView {
       const count = squad ? squad.count : 1;
       const isSelected = this.selectedSquadIndex === squadIndex;
 
+      // Resolve combat stats from authoritative domain/content
+      const attack = unitDef?.baseDamage ?? 0;
+      const hp = unitDef?.hpPerUnit ?? 0;
+      const level = runState?.unitTypeProgression?.[creatureCard.unitTypeId]?.level ?? 1;
+
+      // Cleaned description text showing active abilities instead of redundant deployment statuses
+      const abilitiesList = unitDef
+        ? unitDef.abilities
+            .map((a) =>
+              a
+                .split('-')
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' ')
+            )
+            .join('\n')
+        : '';
+
       let view = this.cardViews.get(creatureCard.instanceId);
       const isNew = !view;
-
-      const descriptionText = isDeployed ? 'DEPLOYED ON GRID' : 'READY TO DEPLOY';
 
       if (!view) {
         // Create new CreatureCardView starting slightly below with alpha 0 and scale 0.9 (card entry tween)
@@ -122,8 +145,11 @@ export class CreatureBenchView {
           instanceId: creatureCard.instanceId,
           contentId: creatureCard.unitTypeId,
           name: unitDef?.name ?? creatureCard.unitTypeId,
-          description: descriptionText,
+          description: abilitiesList,
           count,
+          attack,
+          hp,
+          level,
           isDeployed,
         });
         view.setAlpha(0);
@@ -152,8 +178,11 @@ export class CreatureBenchView {
         // Correctly update dynamic count text, rules description, and deployed status of existing CardViews on reflow
         view.updateDynamicContent({
           count,
-          description: descriptionText,
+          description: abilitiesList,
           isDeployed,
+          attack,
+          hp,
+          level,
         });
       }
 
