@@ -279,8 +279,15 @@ the board. Labels derive from combat and run state rather than UI copies.
 
 During Choose Actions, the sidebar browses surviving squads and their available
 abilities, including progression unlocks. A selection is locked for that turn.
-Spell names and Mana costs remain simple clickable controls, with pages of three
-when needed. Confirm Attack validates the prepared attack and automatically
+During player ACTION, the lower-right hand displays cards in hand order, with
+pages of three when needed. Cards show name, Mana cost, effect description, and
+placeholder art. Affordable cards enlarge to 1.2 scale on hover and play on click;
+unaffordable cards are dimmed and disabled. Playing rebuilds the hand and Mana HUD
+from combat state. Cards are hidden outside player ACTION.
+Optional spell `imageKey` values reference preloaded textures; missing textures
+use the placeholder. Art fits an 88×30 logical-pixel area with aspect ratio preserved.
+Draw presentation and spell targeting remain future work.
+Confirm Attack validates the prepared attack and automatically
 resolves it, then runs the existing Duskborn turn and returns player control if
 combat continues. There is no second resolution or end-turn confirmation.
 Resolution is currently instantaneous; no attack animations are implemented.

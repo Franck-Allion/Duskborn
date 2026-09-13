@@ -542,7 +542,7 @@ export function repositionSquad(
  * - Only legal when side matches state.activeSide.
  * - Both squads must exist and belong to the active side.
  * - Both squads must be surviving (count > 0).
- * - Both squads must have non-null positions.
+ * - At least one squad must have a non-null position (replacement is allowed).
  * - Unit type IDs must be different.
  * - Prospective final board must be valid under all current deployment invariants.
  */
@@ -625,7 +625,8 @@ export function canSwapSquads(
   }
 
   // 4. Validate lane coverage if the board is fully deployed
-  const allActiveDeployed = tempState.playerSquads
+  const activeSideSquads = side === 'player' ? tempState.playerSquads : tempState.enemySquads;
+  const allActiveDeployed = activeSideSquads
     .filter((s) => s.count > 0)
     .every((s) => s.position !== null);
 

@@ -14,6 +14,7 @@ import {
   getUncoveredOpponentColumns,
   getAvailableAbilitiesForUnitType,
   applyCombatVictoryToRunState,
+  playSpell,
   beginTurn,
   confirmDeployment,
   canRepositionSquad,
@@ -27,6 +28,7 @@ import {
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 import { CombatActionPanel } from '../ui/CombatActionPanel';
+import { SpellHandView } from '../ui/SpellHandView';
 import { commitPlayerAttack, canReturnToMap } from '../game/combat/CombatInteraction';
 import { combatPhaseLabel, squadName, partialHpLabel } from '../ui/combatPresentation';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
@@ -49,6 +51,7 @@ export class CombatScene extends Phaser.Scene {
   private deploymentHint!: Phaser.GameObjects.Text;
   private sidebarTitle!: Phaser.GameObjects.Text;
   private actionPanel!: CombatActionPanel;
+  private spellHand!: SpellHandView;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
   private turnText!: Phaser.GameObjects.Text;
@@ -195,6 +198,10 @@ export class CombatScene extends Phaser.Scene {
     this.selectionText = this.add.text(148, 463, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#cbd5e1',
     });
+    this.spellHand = new SpellHandView(this, (spellId) => {
+      playSpell(this.combatState, 'player', spellId);
+      this.refreshDeploymentUI();
+    });
     this.actionPanel = new CombatActionPanel(this,
       () => this.refreshDeploymentUI(),
       () => this.commitPlayerAttack(),
@@ -320,6 +327,7 @@ export class CombatScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, cancelDrag);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.actionPanel.clear();
+      this.spellHand.clear();
       this.input.off('dragstart', this.startSquadDrag, this);
       this.input.off('drag', this.moveSquadDrag, this);
       this.input.off('dragend', this.endSquadDrag, this);
@@ -438,6 +446,7 @@ export class CombatScene extends Phaser.Scene {
     }
 
     this.actionPanel.clear();
+    this.spellHand.render(this.combatState);
     this.confirmButtonVisuals.forEach((visual) => visual.destroy());
     this.confirmButtonVisuals = [];
     this.sidebarTitle.setText(this.combatState.phase === 'DEPLOYMENT'

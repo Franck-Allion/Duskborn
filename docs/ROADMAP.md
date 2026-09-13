@@ -1079,15 +1079,18 @@ The goal is not to reproduce a full collectible-card-game interface, but to make
 
 ### Hand
 
-* [ ] Render the player's hand persistently during ACTION
+* [x] Render the player's hand persistently during ACTION
 * [ ] Give every spell a replaceable card image / artwork
-* [ ] Display spell name
-* [ ] Display Mana cost
-* [ ] Display concise effect text
-* [ ] Visually distinguish affordable and unaffordable cards
-* [ ] Allow hover / pointer focus to enlarge or inspect a card
-* [ ] Keep cards readable at supported resolutions
-* [ ] Fan or arrange cards clearly when multiple cards are held
+* [x] Display spell name
+* [x] Display Mana cost
+* [x] Display concise effect text
+* [x] Visually distinguish affordable and unaffordable cards
+* [x] Allow hover / pointer focus to enlarge or inspect a card
+* [x] Keep cards readable at supported resolutions
+* [x] Fan or arrange cards clearly when multiple cards are held
+
+0.6.19A uses placeholder art with optional preloaded texture keys. Per-spell artwork
+remains open. Hands larger than three cards use pages while preserving hand order.
 
 ### Draw presentation
 
@@ -1131,10 +1134,10 @@ Mana paid
 card enters resolution queue
 ```
 
-* [ ] Card interaction delegates legality to pure combat-domain APIs
+* [x] Card interaction delegates legality to pure combat-domain APIs
 * [ ] Invalid targets are visually rejected
 * [ ] Cancelling target selection spends no Mana
-* [ ] Successfully played card leaves the hand visibly
+* [x] Successfully played card leaves the hand visibly
 * [ ] Card enters discard after resolution according to current rules
 
 Success condition:

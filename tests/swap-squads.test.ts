@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   canSwapSquads,
   swapSquads,
+  repositionSquad,
+  confirmDeployment,
   type CombatState,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
@@ -34,6 +36,33 @@ function createSwapCombatState(): CombatState {
 }
 
 describe('Combat Squad Swapping', () => {
+  it.each(['player', 'enemy'] as const)('allows %s reserve replacement but keeps final confirmation strict', (side) => {
+    const state = createSwapCombatState();
+    state.activeSide = side;
+    const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+    const [first, second] = squads;
+    first.position = null;
+    const destination = structuredClone(second.position);
+    expect(canSwapSquads(state, side, first.unitTypeId, second.unitTypeId)).toBe(true);
+    expect(swapSquads(state, side, first.unitTypeId, second.unitTypeId)).toBe(true);
+    expect(first.position).toEqual(destination);
+    expect(second.position).toBeNull();
+    expect(confirmDeployment(state)).toBe(false);
+    expect(repositionSquad(state, side, second.unitTypeId, { column: 2, row: side === 'player' ? 2 : 1 })).toBe(true);
+    expect(confirmDeployment(state)).toBe(true);
+  });
+
+  it('validates fully deployed enemy coverage even if a player squad is unpositioned', () => {
+    const state = createSwapCombatState();
+    state.activeSide = 'enemy';
+    state.playerSquads[1].position = null;
+    state.enemySquads[0].position = { column: 4, row: 1 };
+    const before = structuredClone(state);
+    expect(canSwapSquads(state, 'enemy', 'duskborn-brute', 'duskborn-archer')).toBe(false);
+    expect(swapSquads(state, 'enemy', 'duskborn-brute', 'duskborn-archer')).toBe(false);
+    expect(state).toEqual(before);
+  });
+
   it('Basic swap: exchanges positions correctly', () => {
     const state = createSwapCombatState();
     expect(canSwapSquads(state, 'player', 'guardian', 'archer')).toBe(true);

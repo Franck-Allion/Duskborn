@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   canConfirmAttack,
-  playSpell,
   tryUseAbility,
   chooseUnitTypeAbilityUnlock,
   getEffectiveAbilitiesForUnitType,
@@ -10,7 +9,6 @@ import {
 import { canReturnToMap } from '../game/combat/CombatInteraction';
 import type { RunState } from '../game/core/RunState';
 import { ABILITY_REGISTRY } from '../game/content/abilities';
-import { SPELL_REGISTRY } from '../game/content/spells';
 import { UNIT_REGISTRY } from '../game/content/unitTypes';
 import {
   abilityEffectLabel,
@@ -21,7 +19,6 @@ import {
 /** Phase-specific controls only; permanent tactical information belongs to the scene. */
 export class CombatActionPanel {
   private visuals: Phaser.GameObjects.GameObject[] = [];
-  private handPage = 0;
   private squadPage = 0;
 
   constructor(
@@ -98,32 +95,6 @@ export class CombatActionPanel {
       }
     }
 
-    this.text(313, 'Spell hand');
-    const hand = state.playerDeck.hand;
-    const pages = Math.max(1, Math.ceil(hand.length / 3));
-    this.handPage = Math.min(this.handPage, pages - 1);
-    let y = 335;
-    for (const id of hand.slice(this.handPage * 3, this.handPage * 3 + 3)) {
-      const spell = SPELL_REGISTRY.get(id);
-      this.button(
-        y,
-        `${spell?.name ?? id} (${spell?.manaCost ?? '?'} Mana)`,
-        () => {
-          if (!this.canPlayerAct(state)) return;
-          const success = playSpell(state, 'player', id);
-          this.refresh();
-          if (!success) this.feedback('Spell unavailable / insufficient Mana.');
-        },
-      );
-      y += 23;
-    }
-    if (!hand.length) this.text(y, 'No spells in hand', '#94a3b8');
-    if (pages > 1)
-      this.button(410, `Hand ${this.handPage + 1}/${pages} - Next`, () => {
-        if (!this.canPlayerAct(state)) return;
-        this.handPage = (this.handPage + 1) % pages;
-        this.refresh();
-      });
     this.button(
       470,
       'Confirm Attack',
