@@ -9,11 +9,11 @@ export type CardVisualState =
   | 'DRAGGING'
   | 'DEPLOYED';
 
-export const CARD_WIDTH = 122;       // Spell card normal width
-export const CARD_HEIGHT = 171.56;   // Spell card normal height
+export const CARD_WIDTH = 136;       // Spell card normal width after resize
+export const CARD_HEIGHT = 191.25;   // Spell card normal height after resize
 
-export const CREATURE_CARD_WIDTH = 104;     // Creature card normal width
-export const CREATURE_CARD_HEIGHT = 146.25; // Creature card normal height
+export const CREATURE_CARD_WIDTH = 118;     // Creature card normal width after resize
+export const CREATURE_CARD_HEIGHT = 165.94; // Creature card normal height after resize
 
 export interface CardViewConfig {
   instanceId: string;
@@ -84,8 +84,17 @@ export class CardView extends Phaser.GameObjects.Container {
   protected artBaseX: number = 0;
   protected artBaseY: number = 0;
 
+  // Authoritative local-space artwork rectangle
+  protected artRect!: { x: number; y: number; width: number; height: number };
+
   // Stored filter controllers created once per filtered Image to prevent leaks/progressive stacking
   protected imageFilters: CardImageFilters[] = [];
+
+  // Track explicit resting transform data for deterministic hit testing
+  public restX: number = 0;
+  public restY: number = 0;
+  public restRotation: number = 0;
+  public restScale: number = 1;
 
   constructor(
     scene: Phaser.Scene,
@@ -102,22 +111,19 @@ export class CardView extends Phaser.GameObjects.Container {
 
     this.setSize(this.widthVal, this.heightVal);
 
-    // Compute center of the artwork slot explicitly
-    const artX = -this.widthVal * 0.38;
-    const artY = -this.heightVal * 0.38;
-    const artW = this.widthVal * 0.76;
-    const artH = this.heightVal * 0.44;
-    this.artBaseX = artX + artW / 2;
-    this.artBaseY = artY + artH / 2;
+    // Compute center of the artwork slot explicitly using authoritative proportions
+    this.artRect = {
+      x: -this.widthVal * 0.38,
+      y: -this.heightVal * 0.38,
+      width: this.widthVal * 0.76,
+      height: this.heightVal * 0.44,
+    };
+
+    this.artBaseX = this.artRect.x + this.artRect.width / 2;
+    this.artBaseY = this.artRect.y + this.artRect.height / 2;
 
     this.createHierarchy();
     this.setVisualState('IDLE');
-
-    // Make the entire container interactive with a rectangular hit area matching card bounds
-    this.setInteractive(
-      new Phaser.Geom.Rectangle(-this.widthVal / 2, -this.heightVal / 2, this.widthVal, this.heightVal),
-      Phaser.Geom.Rectangle.Contains,
-    );
 
     this.setupInteractions();
     scene.add.existing(this);
@@ -156,20 +162,16 @@ export class CardView extends Phaser.GameObjects.Container {
     this.artContainer = this.scene.add.container(0, 0);
     this.add(this.artContainer);
 
-    const artX = -w * 0.38;
-    const artY = -h * 0.38;
-    const artW = w * 0.76;
-    const artH = h * 0.44;
-
     const artKey = isSpell
       ? `card-art-spell-${this.config.contentId}`
       : `card-art-creature-${this.config.contentId}`;
 
     if (this.scene.textures.exists(artKey)) {
       const artImg = this.scene.add.image(this.artBaseX, this.artBaseY, artKey);
+      artImg.setOrigin(0.5, 0.5);
       
       // Real Aspect-ratio Cover/Crop calculation
-      const scale = Math.max(artW / artImg.width, artH / artImg.height);
+      const scale = Math.max(this.artRect.width / artImg.width, this.artRect.height / artImg.height);
       artImg.setScale(scale);
       
       this.art = artImg;
@@ -178,12 +180,12 @@ export class CardView extends Phaser.GameObjects.Container {
       // Procedural fallback artwork
       const artG = this.scene.add.graphics();
       artG.fillStyle(isSpell ? 0x1d4ed8 : 0x7c2d12, 1);
-      artG.fillRoundedRect(artX, artY, artW, artH, 6);
+      artG.fillRoundedRect(this.artRect.x, this.artRect.y, this.artRect.width, this.artRect.height, 6);
       
       // Draw procedural magic symbol or shield centered at slot base Y
       artG.lineStyle(1.5, isSpell ? 0x60a5fa : 0xf97316, 0.6);
       if (isSpell) {
-        artG.strokeCircle(this.artBaseX, this.artBaseY, artW * 0.2);
+        artG.strokeCircle(this.artBaseX, this.artBaseY, this.artRect.width * 0.2);
         artG.strokeRect(this.artBaseX - 4, this.artBaseY - 4, 8, 8);
       } else {
         // Shield outline
@@ -204,10 +206,10 @@ export class CardView extends Phaser.GameObjects.Container {
     // Apply geometry masking with a small 3px inner artwork safe margin
     // This visually separates the art from the frame and guarantees zero bleeding
     const inset = 3;
-    const maskX = artX + inset;
-    const maskY = artY + inset;
-    const maskW = artW - inset * 2;
-    const maskH = artH - inset * 2;
+    const maskX = this.artRect.x + inset;
+    const maskY = this.artRect.y + inset;
+    const maskW = this.artRect.width - inset * 2;
+    const maskH = this.artRect.height - inset * 2;
 
     const maskGraphics = this.scene.make.graphics({ x: this.x, y: this.y }, false);
     maskGraphics.fillStyle(0xffffff, 1);
@@ -235,7 +237,7 @@ export class CardView extends Phaser.GameObjects.Container {
       
       // Art window inner frame border
       frameG.lineStyle(1.5, isSpell ? 0x3b82f6 : 0x78350f, 1);
-      frameG.strokeRoundedRect(artX, artY, artW, artH, 6);
+      frameG.strokeRoundedRect(this.artRect.x, this.artRect.y, this.artRect.width, this.artRect.height, 6);
       this.frame = frameG;
       this.add(frameG);
     }
@@ -252,7 +254,7 @@ export class CardView extends Phaser.GameObjects.Container {
     const fontRes = Math.max(1, Math.ceil(this.scene.cameras.main.zoom));
     this.nameText = this.scene.add.text(0, h * 0.14, this.config.name, {
       fontFamily: 'Georgia, serif',
-      fontSize: `${isSpell ? 11 : 10}px`,
+      fontSize: `${isSpell ? 12 : 11}px`,
       color: '#ffffff',
       fontStyle: 'bold',
     }).setOrigin(0.5).setResolution(fontRes);
@@ -265,15 +267,16 @@ export class CardView extends Phaser.GameObjects.Container {
     this.add(this.rulesBg);
 
     // 9. Rules Text
-    const bodyFontSize = isSpell ? 9 : 8;
-    this.rulesText = this.scene.add.text(0, h * 0.35, this.config.description, {
+    this.rulesText = this.scene.add.text(0, h * 0.35, '', {
       fontFamily: 'Arial, sans-serif',
-      fontSize: `${bodyFontSize}px`,
+      fontSize: '10px',
       color: '#cbd5e1',
-      wordWrap: { width: w * 0.78 },
       align: 'center',
     }).setOrigin(0.5).setResolution(fontRes);
     this.add(this.rulesText);
+
+    // Fit rules text dynamically to avoid vertical overflow
+    this.fitRulesText(this.config.description, w * 0.78, h * 0.20);
 
     // 10. Badges
     const badgeFontRes = Math.max(1, Math.ceil(this.scene.cameras.main.zoom));
@@ -369,54 +372,70 @@ export class CardView extends Phaser.GameObjects.Container {
       }).setOrigin(0.5).setResolution(badgeFontRes);
       this.add(this.hpBadgeText);
     }
+
+    // Initialize native filters once lazily
+    this.applyPhaser4Filters();
+  }
+
+  private applyPhaser4Filters(): void {
+    this.imageFilters = [];
+    try {
+      const targets = [this.frame, this.art].filter(
+        (t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image
+      );
+
+      for (const img of targets) {
+        // 1. Enable filters system on image
+        if (typeof img.enableFilters === 'function') {
+          img.enableFilters();
+        }
+
+        // 2. Add Glow filter.
+        // We choose img.filters.external for Glow because an outer glow
+        // needs to extend beyond the image's bounding box/silhouette cleanly
+        // without being clipped by the internal texture container.
+        let glow: unknown = null;
+        const imgFilters = img.filters as unknown as {
+          external?: { addGlow?: () => unknown };
+          internal?: { addGlow?: () => unknown; addColorMatrix?: () => unknown };
+        };
+        if (imgFilters?.external && typeof imgFilters.external.addGlow === 'function') {
+          glow = imgFilters.external.addGlow();
+        } else if (imgFilters?.internal && typeof imgFilters.internal.addGlow === 'function') {
+          glow = imgFilters.internal.addGlow();
+        }
+
+        if (glow) {
+          (glow as { setActive: (v: boolean) => void }).setActive(false);
+        }
+
+        // 3. Add ColorMatrix filter.
+        // We choose img.filters.internal for ColorMatrix because desaturation
+        // and brightness corrections are per-pixel calculations that are best done
+        // internally before any external rendering overlays are applied.
+        let colorMatrix: unknown = null;
+        if (imgFilters?.internal && typeof imgFilters.internal.addColorMatrix === 'function') {
+          colorMatrix = imgFilters.internal.addColorMatrix();
+        }
+
+        if (colorMatrix) {
+          (colorMatrix as { setActive: (v: boolean) => void }).setActive(false);
+        }
+
+        if (img && glow && colorMatrix) {
+          this.imageFilters.push({
+            target: img,
+            glow: glow as CardImageFilters['glow'],
+            colorMatrix: colorMatrix as CardImageFilters['colorMatrix'],
+          });
+        }
+      }
+    } catch {
+      // Safe fallback if filters are unsupported by the renderer or Phaser version
+    }
   }
 
   private setupInteractions(): void {
-    this.on('pointerover', () => {
-      if (this.visualState !== 'DISABLED') {
-        this.setVisualState('HOVER');
-      }
-    });
-
-    this.on('pointerout', () => {
-      if (this.visualState !== 'DISABLED') {
-        this.setVisualState(this.config.isDeployed ? 'DEPLOYED' : 'IDLE');
-      }
-      
-      // Reset artwork shift smoothly back to base position on pointerout
-      if (this.art) {
-        this.scene.tweens.killTweensOf(this.art);
-        this.scene.tweens.add({
-          targets: this.art,
-          x: this.artBaseX,
-          y: this.artBaseY,
-          duration: 120,
-          ease: 'Quad.Out',
-        });
-      }
-    });
-
-    this.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.visualState === 'HOVER') {
-        // Convert world/screen pointer position into CardView-local coordinates via Matrix Inversion
-        const matrix = this.getWorldTransformMatrix();
-        const localPoint = matrix.applyInverse(pointer.worldX, pointer.worldY);
-
-        const halfW = this.widthVal / 2;
-        const halfH = this.heightVal / 2;
-
-        const normalizedX = Phaser.Math.Clamp(localPoint.x / halfW, -1, 1);
-        const normalizedY = Phaser.Math.Clamp(localPoint.y / halfH, -1, 1);
-
-        const px = normalizedX * 2.5; // max +-2.5 px
-        const py = normalizedY * 1.5; // max +-1.5 px
-
-        if (this.art) {
-          this.art.setPosition(this.artBaseX + px, this.artBaseY + py);
-        }
-      }
-    });
-
     this.on('pointerdown', () => {
       if (this.visualState === 'HOVER' || this.visualState === 'PLAYABLE') {
         // Quick visual click squish effect (briefly decrease scale by 4%)
@@ -431,6 +450,61 @@ export class CardView extends Phaser.GameObjects.Container {
         this.setData('clickTween', scaleTween);
       }
     });
+  }
+
+  /**
+   * Helper method implementing a deterministic font fitting strategy
+   * to guarantee rules and description text never overflow card bounds.
+   */
+  public fitRulesText(text: string, maxWidth: number, maxHeight: number): void {
+    if (!this.rulesText) return;
+
+    this.rulesText.setText(text);
+    this.rulesText.setWordWrapWidth(maxWidth);
+
+    // Font-size scaling steps
+    const sizes = [10, 9, 8];
+    for (const size of sizes) {
+      this.rulesText.setFontSize(`${size}px`);
+      if (this.rulesText.height <= maxHeight) {
+        break;
+      }
+    }
+  }
+
+  /**
+   * Evaluates if a given world coordinate falls inside the card's RESTING bounds.
+   * Completely independent of any active hover lift or zoom scale.
+   */
+  public containsWorldPoint(worldX: number, worldY: number): boolean {
+    // 1. Translate point relative to rest position
+    const dx = worldX - this.restX;
+    const dy = worldY - this.restY;
+
+    // 2. Rotate point backwards by rest angle
+    const cos = Math.cos(-this.restRotation);
+    const sin = Math.sin(-this.restRotation);
+    const lx = dx * cos - dy * sin;
+    const ly = dx * sin + dy * cos;
+
+    // 3. Scale point backwards by rest scale
+    const sx = lx / this.restScale;
+    const sy = ly / this.restScale;
+
+    // 4. Check within bounding box of card
+    const w = this.widthVal;
+    const h = this.heightVal;
+    return sx >= -w / 2 && sx <= w / 2 && sy >= -h / 2 && sy <= h / 2;
+  }
+
+  /**
+   * Sets explicit resting transform data of the card for predictable hit testing.
+   */
+  public setRestTransform(x: number, y: number, rotation: number, scale: number): void {
+    this.restX = x;
+    this.restY = y;
+    this.restRotation = rotation;
+    this.restScale = scale;
   }
 
   /**
@@ -475,9 +549,7 @@ export class CardView extends Phaser.GameObjects.Container {
     }
 
     if (dynamic.description !== undefined) {
-      if (this.rulesText) {
-        this.rulesText.setText(dynamic.description);
-      }
+      this.fitRulesText(dynamic.description, this.widthVal * 0.78, this.heightVal * 0.20);
     }
 
     if (dynamic.isDeployed !== undefined) {

@@ -15,6 +15,7 @@ export class CreatureBenchView {
   private backgroundTray: Phaser.GameObjects.Graphics | null = null;
   private visible = true;
   private currentState: CombatState | null = null;
+  private hoveredCardId: string | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -22,16 +23,147 @@ export class CreatureBenchView {
     private selectedSquadIndex: number | null = null,
   ) {
     this.createBackgroundTray();
+    this.setupCentralHoverArbitration();
   }
 
   private createBackgroundTray(): void {
-    // Beautiful rectangular plate backdrop tray representing safe layout envelope x: ~20-260, y: ~405-535
+    // Beautiful rectangular plate backdrop tray representing safe layout envelope x: ~20-330 (wider), y: ~405-535
     this.backgroundTray = this.scene.add.graphics();
     this.backgroundTray.fillStyle(0x0a0f1d, 0.45); // semi-transparent slate
     this.backgroundTray.lineStyle(1.5, 0x1e293b, 0.65);
-    this.backgroundTray.fillRoundedRect(20, 410, 240, 120, 8);
-    this.backgroundTray.strokeRoundedRect(20, 410, 240, 120, 8);
+    this.backgroundTray.fillRoundedRect(20, 410, 310, 120, 8); // Extended width to 310 to prevent cramped cards
+    this.backgroundTray.strokeRoundedRect(20, 410, 310, 120, 8);
     this.backgroundTray.setDepth(35); // UI TRAY DEPTH
+  }
+
+  private setupCentralHoverArbitration(): void {
+    // Bind centralized hover arbitration and click handlers to input to avoid independent over/out races
+    this.scene.input.on('pointermove', this.handlePointerMove, this);
+    this.scene.input.on('pointerdown', this.handlePointerDown, this);
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.visible || !this.currentState) return;
+
+    const creaturesInBench = (this.currentState.playerCombatDeck?.creatureBench ?? []).filter((card) => {
+      const squad = this.currentState!.playerSquads.find((s) => s.unitTypeId === card.unitTypeId);
+      return squad ? squad.count > 0 && squad.position === null : true;
+    });
+
+    let candidateId: string | null = null;
+
+    // Iterate cards in reverse (topmost depth / frontmost first) to resolve overlap priority
+    for (let i = creaturesInBench.length - 1; i >= 0; i--) {
+      const creatureCard = creaturesInBench[i];
+      const view = this.cardViews.get(creatureCard.instanceId);
+      if (view && view.containsWorldPoint(pointer.worldX, pointer.worldY)) {
+        const isPlayerTurn = this.currentState.activeSide === 'player';
+        const isInteractive = isPlayerTurn && this.currentState.phase === 'DEPLOYMENT';
+        
+        if (isInteractive) {
+          candidateId = creatureCard.instanceId;
+          break;
+        }
+      }
+    }
+
+    if (candidateId !== this.hoveredCardId) {
+      // Exit hover for the previously focused card
+      if (this.hoveredCardId) {
+        const oldView = this.cardViews.get(this.hoveredCardId);
+        if (oldView) {
+          this.playHoverExit(oldView);
+        }
+      }
+
+      // Enter hover for the newly focused card
+      if (candidateId) {
+        const newView = this.cardViews.get(candidateId);
+        if (newView) {
+          this.playHoverEnter(newView);
+        }
+      }
+
+      this.hoveredCardId = candidateId;
+    }
+  }
+
+  private handlePointerDown(): void {
+    if (!this.visible || !this.currentState) return;
+
+    // Click targets the currently resolved hovered card exclusively
+    if (this.hoveredCardId) {
+      const view = this.cardViews.get(this.hoveredCardId);
+      if (view && view.getVisualState() !== 'DISABLED') {
+        const isPlayerTurn = this.currentState.activeSide === 'player';
+        const isInteractive = isPlayerTurn && this.currentState.phase === 'DEPLOYMENT';
+        if (isInteractive) {
+          const currentSquadIndex = this.currentState.playerSquads.findIndex((s) => s.unitTypeId === view.config.contentId);
+          if (currentSquadIndex !== -1) {
+            if (this.selectedSquadIndex === currentSquadIndex) {
+              this.onSelect(null); // deselect
+            } else {
+              this.onSelect(currentSquadIndex); // select
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private playHoverEnter(view: CreatureCardView): void {
+    this.scene.tweens.killTweensOf(view);
+    view.setVisualState('HOVER');
+    view.setDepth(80); // Bring to frontmost depth
+
+    this.scene.tweens.add({
+      targets: view,
+      y: view.restY - 26,  // Lift up cleanly into safe gap
+      angle: 0,            // Straighten rotation
+      scaleX: 1.12,        // Moderate scaling (between 1.12-1.16)
+      scaleY: 1.12,
+      duration: 120,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        view.updateMaskGeometry();
+      },
+    });
+  }
+
+  private playHoverExit(view: CreatureCardView): void {
+    this.scene.tweens.killTweensOf(view);
+
+    const isPlayerTurn = this.currentState?.activeSide === 'player';
+    const isInteractive = isPlayerTurn && this.currentState?.phase === 'DEPLOYMENT';
+    
+    const squadIndex = this.currentState ? this.currentState.playerSquads.findIndex((s) => s.unitTypeId === view.config.contentId) : -1;
+    const isSelected = this.selectedSquadIndex === squadIndex;
+
+    let targetVisualState: CardVisualState = 'IDLE';
+    if (!isPlayerTurn) {
+      targetVisualState = 'DISABLED';
+    } else if (isSelected) {
+      targetVisualState = 'SELECTED';
+    } else if (isInteractive) {
+      targetVisualState = 'PLAYABLE';
+    }
+
+    view.setVisualState(targetVisualState);
+    view.setDepth(isSelected ? 90 : view.restX); // Selected stays highest, rest ordered by position
+
+    this.scene.tweens.add({
+      targets: view,
+      x: view.restX,
+      y: view.restY,
+      angle: view.restRotation * (180 / Math.PI),
+      scaleX: view.restScale,
+      scaleY: view.restScale,
+      duration: 150,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        view.updateMaskGeometry();
+      },
+    });
   }
 
   public setSelectedSquadIndex(index: number | null): void {
@@ -42,6 +174,12 @@ export class CreatureBenchView {
     this.visible = visible;
     this.backgroundTray?.setVisible(visible);
     this.cardViews.forEach((view) => view.setVisible(visible));
+
+    if (!visible && this.hoveredCardId) {
+      const oldView = this.cardViews.get(this.hoveredCardId);
+      if (oldView) this.playHoverExit(oldView);
+      this.hoveredCardId = null;
+    }
   }
 
   public render(state: CombatState, runState: RunState | null = null): void {
@@ -86,6 +224,10 @@ export class CreatureBenchView {
             view.destroy();
           },
         });
+        
+        if (this.hoveredCardId === instanceId) {
+          this.hoveredCardId = null;
+        }
         this.cardViews.delete(instanceId);
       }
     });
@@ -98,12 +240,12 @@ export class CreatureBenchView {
     this.backgroundTray?.setVisible(true);
 
     // 2. Calculate transforms for bench (fanned slightly at bottom left)
-    // Safe bench coordinates: x: 20 to 260 (width 240), centerY around 465, y bottom edge ~525
+    // Safe bench coordinates: x: 20 to 330 (width 310), centerY around 465, y bottom edge ~535
     const transforms = calculateHandLayout(
       creaturesInBench.length,
-      140,    // centerX of bench tray
+      175,    // centerX of bench tray (310 / 2 + 20 = 175)
       465,    // baseY of bench tray
-      230,    // availableWidth
+      290,    // availableWidth
       true,   // isBench = true (smaller width 104 after card resizing)
     );
 
@@ -157,25 +299,6 @@ export class CreatureBenchView {
         view.setAlpha(0);
         view.setScale(0.9);
         this.cardViews.set(creatureCard.instanceId, view);
-
-        // Bind click trigger selection dynamically to prevent stale state closures
-        view.on('pointerdown', () => {
-          const current = this.currentState;
-          if (current) {
-            const isCurrentPlayerTurn = current.activeSide === 'player';
-            const isCurrentInteractive = isCurrentPlayerTurn && current.phase === 'DEPLOYMENT';
-            if (isCurrentInteractive) {
-              const currentSquadIndex = current.playerSquads.findIndex((s) => s.unitTypeId === creatureCard.unitTypeId);
-              if (currentSquadIndex !== -1) {
-                if (this.selectedSquadIndex === currentSquadIndex) {
-                  this.onSelect(null); // deselect
-                } else {
-                  this.onSelect(currentSquadIndex); // select
-                }
-              }
-            }
-          }
-        });
       } else {
         // Correctly update dynamic count text, rules description, and deployed status of existing CardViews on reflow
         view.updateDynamicContent({
@@ -189,104 +312,62 @@ export class CreatureBenchView {
         });
       }
 
-      // Determine visual state
-      let targetVisualState: CardVisualState = 'IDLE';
-      if (shouldDimBench) {
-        targetVisualState = 'DISABLED';
-      } else if (isDeployed) {
-        targetVisualState = 'DEPLOYED';
-      } else if (isSelected) {
-        targetVisualState = 'SELECTED';
-      } else if (isInteractive) {
-        targetVisualState = 'PLAYABLE'; // Deployable glow
-      }
+      // Track explicit rest transform
+      view.setRestTransform(transform.x, transform.y, transform.rotation, transform.scale);
 
-      view.setVisualState(targetVisualState);
-      view.setDepth(isSelected ? 90 : transform.depth); // Lift selected card above everything
+      // Disable default interactive mouse-events on CardView itself to avoid races
+      view.disableInteractive();
 
-      // Stop any active movement tween first to avoid stacked tweens
-      this.scene.tweens.killTweensOf(view);
-
-      // Tween to transform
-      this.scene.tweens.add({
-        targets: view,
-        x: transform.x,
-        y: transform.y,
-        angle: transform.rotation * (180 / Math.PI),
-        scaleX: transform.scale,
-        scaleY: transform.scale,
-        alpha: shouldDimBench ? 0.45 : 1.0,
-        duration: isNew ? 220 : 200,
-        ease: 'Cubic.Out',
-        onUpdate: () => {
-          view?.updateMaskGeometry();
-        },
-      });
-
-      // Hover lifts card up slightly during DEPLOYMENT phase
-      if (isInteractive && !isDeployed) {
-        view.setInteractive();
-
-        view.removeAllListeners('pointerover');
-        view.removeAllListeners('pointerout');
-
-        const originalDepth = transform.depth;
-
-        view.on('pointerover', () => {
-          this.scene.tweens.killTweensOf(view!);
-          view!.setVisualState('HOVER');
-          view!.setDepth(80); // CARD_HOVER depth
-
-          this.scene.tweens.add({
-            targets: view,
-            y: transform.y - 24, // Lift slightly less for bench cards
-            angle: 0,
-            scaleX: 1.18,
-            scaleY: 1.18,
-            duration: 130,
-            ease: 'Cubic.Out',
-            onUpdate: () => {
-              view?.updateMaskGeometry();
-            },
-          });
-        });
-
-        view.on('pointerout', () => {
-          this.scene.tweens.killTweensOf(view!);
-          view!.setVisualState(isSelected ? 'SELECTED' : 'PLAYABLE');
-          view!.setDepth(isSelected ? 90 : originalDepth);
-
-          this.scene.tweens.add({
-            targets: view,
-            x: transform.x,
-            y: transform.y,
-            angle: transform.rotation * (180 / Math.PI),
-            scaleX: transform.scale,
-            scaleY: transform.scale,
-            duration: 160,
-            ease: 'Cubic.Out',
-            onUpdate: () => {
-              view?.updateMaskGeometry();
-            },
-          });
-        });
+      // If we are currently hovering this card, keep its hovered presentation
+      if (this.hoveredCardId === creatureCard.instanceId) {
+        view.setVisualState('HOVER');
+        view.setDepth(80);
       } else {
-        // De-emphasized or not deployment phase -> disable/dim hover
-        view.removeAllListeners('pointerover');
-        view.removeAllListeners('pointerout');
-        
-        if (isDeployed || shouldDimBench) {
-          view.disableInteractive();
-        } else {
-          view.setInteractive();
+        // Determine visual state
+        let targetVisualState: CardVisualState = 'IDLE';
+        if (shouldDimBench) {
+          targetVisualState = 'DISABLED';
+        } else if (isDeployed) {
+          targetVisualState = 'DEPLOYED';
+        } else if (isSelected) {
+          targetVisualState = 'SELECTED';
+        } else if (isInteractive) {
+          targetVisualState = 'PLAYABLE'; // Deployable glow
         }
+
+        view.setVisualState(targetVisualState);
+        view.setDepth(isSelected ? 90 : transform.depth);
+
+        // Stop any active movement tween first to avoid stacked tweens
+        this.scene.tweens.killTweensOf(view);
+
+        // Tween to transform
+        this.scene.tweens.add({
+          targets: view,
+          x: transform.x,
+          y: transform.y,
+          angle: transform.rotation * (180 / Math.PI),
+          scaleX: transform.scale,
+          scaleY: transform.scale,
+          alpha: shouldDimBench ? 0.45 : 1.0,
+          duration: isNew ? 220 : 200,
+          ease: 'Cubic.Out',
+          onUpdate: () => {
+            view?.updateMaskGeometry();
+          },
+        });
       }
     });
   }
 
   public destroy(): void {
+    // Unbind centralized hover arbitration and click handlers cleanly on destruction
+    this.scene.input.off('pointermove', this.handlePointerMove, this);
+    this.scene.input.off('pointerdown', this.handlePointerDown, this);
+
     this.backgroundTray?.destroy();
     this.cardViews.forEach((view) => view.destroy());
     this.cardViews.clear();
+    this.hoveredCardId = null;
   }
 }

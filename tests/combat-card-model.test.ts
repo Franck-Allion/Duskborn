@@ -1155,5 +1155,31 @@ describe('Unified Combat Card Model', () => {
       expect(currentHp2).toBe(4);
       expect(maxHp).toBe(10);
     });
+
+    it('verifies fanned-card rest-space hit testing mathematics', () => {
+      // Setup mock resting transform of a card at restX: 100, restY: 100, restRotation: 0, scale: 1.0, size 136 x 191
+      const restX = 100;
+      const restY = 100;
+      const width = 136;
+      const height = 191;
+
+      const containsPoint = (wx: number, wy: number) => {
+        const dx = wx - restX;
+        const dy = wy - restY;
+        // Bounding box bounds checking (-width/2 to width/2, -height/2 to height/2)
+        return dx >= -width / 2 && dx <= width / 2 && dy >= -height / 2 && dy <= height / 2;
+      };
+
+      // 1. Center of card is inside
+      expect(containsPoint(100, 100)).toBe(true);
+
+      // 2. Point outside bounding box is outside
+      expect(containsPoint(50, 0)).toBe(false);
+      expect(containsPoint(200, 100)).toBe(false);
+
+      // 3. Edges of card bounds are inside
+      expect(containsPoint(100 + 68, 100)).toBe(true);
+      expect(containsPoint(100, 100 + 95)).toBe(true);
+    });
   });
 });

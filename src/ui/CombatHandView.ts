@@ -15,22 +15,141 @@ export class CombatHandView {
   private backgroundTray: Phaser.GameObjects.Graphics | null = null;
   private visible = true;
   private currentState: CombatState | null = null;
+  private hoveredCardId: string | null = null;
 
   constructor(
     private scene: Phaser.Scene,
     private play: (spellId: string) => void,
   ) {
     this.createBackgroundTray();
+    this.setupCentralHoverArbitration();
   }
 
   private createBackgroundTray(): void {
-    // Beautiful curved/elliptical backdrop tray representing safe layout envelope x: ~265-695, y: ~395-540
+    // Beautiful curved/elliptical backdrop tray representing safe layout envelope x: ~340-820, y: ~395-540
     this.backgroundTray = this.scene.add.graphics();
     this.backgroundTray.fillStyle(0x0a0f1d, 0.45); // semi-transparent slate
     this.backgroundTray.lineStyle(1.5, 0x1e293b, 0.65);
-    this.backgroundTray.fillEllipse(480, 520, 420, 160);
-    this.backgroundTray.strokeEllipse(480, 520, 420, 160);
+    this.backgroundTray.fillEllipse(580, 520, 360, 160); // Offset rightward slightly to fit nicely next to bench
+    this.backgroundTray.strokeEllipse(580, 520, 360, 160);
     this.backgroundTray.setDepth(35); // UI TRAY DEPTH
+  }
+
+  private setupCentralHoverArbitration(): void {
+    // Bind centralized hover arbitration and click handlers to input to avoid independent over/out races
+    this.scene.input.on('pointermove', this.handlePointerMove, this);
+    this.scene.input.on('pointerdown', this.handlePointerDown, this);
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.visible || !this.currentState) return;
+
+    const spellsInHand = this.currentState.playerCombatDeck?.spellHand ?? [];
+    let candidateId: string | null = null;
+
+    // Iterate cards in reverse (topmost depth / frontmost first) to resolve overlap priority
+    for (let i = spellsInHand.length - 1; i >= 0; i--) {
+      const spellCard = spellsInHand[i];
+      const view = this.cardViews.get(spellCard.instanceId);
+      if (view && view.containsWorldPoint(pointer.worldX, pointer.worldY)) {
+        // Only hover if active and playable
+        const isPlayerTurn = this.currentState.activeSide === 'player';
+        const isInteractive = isPlayerTurn && this.currentState.phase === 'ACTION';
+        const playable = isSpellCardPlayable(this.currentState, spellCard.spellId);
+        
+        if (isInteractive && playable) {
+          candidateId = spellCard.instanceId;
+          break;
+        }
+      }
+    }
+
+    if (candidateId !== this.hoveredCardId) {
+      // Exit hover for the previously focused card
+      if (this.hoveredCardId) {
+        const oldView = this.cardViews.get(this.hoveredCardId);
+        if (oldView) {
+          this.playHoverExit(oldView);
+        }
+      }
+
+      // Enter hover for the newly focused card
+      if (candidateId) {
+        const newView = this.cardViews.get(candidateId);
+        if (newView) {
+          this.playHoverEnter(newView);
+        }
+      }
+
+      this.hoveredCardId = candidateId;
+    }
+  }
+
+  private handlePointerDown(): void {
+    if (!this.visible || !this.currentState) return;
+
+    // Click targets the currently resolved hovered card exclusively
+    if (this.hoveredCardId) {
+      const view = this.cardViews.get(this.hoveredCardId);
+      if (view && view.getVisualState() !== 'DISABLED') {
+        const isPlayerTurn = this.currentState.activeSide === 'player';
+        const isInteractive = isPlayerTurn && this.currentState.phase === 'ACTION';
+        if (isInteractive && isSpellCardPlayable(this.currentState, view.config.contentId)) {
+          this.play(view.config.contentId);
+        }
+      }
+    }
+  }
+
+  private playHoverEnter(view: SpellCardView): void {
+    this.scene.tweens.killTweensOf(view);
+    view.setVisualState('HOVER');
+    view.setDepth(80); // Bring to frontmost depth
+
+    this.scene.tweens.add({
+      targets: view,
+      y: view.restY - 40,  // Lift up cleanly into safe gap
+      angle: 0,            // Straighten rotation
+      scaleX: 1.15,        // Moderate scaling (between 1.12-1.16)
+      scaleY: 1.15,
+      duration: 120,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        view.updateMaskGeometry();
+      },
+    });
+  }
+
+  private playHoverExit(view: SpellCardView): void {
+    this.scene.tweens.killTweensOf(view);
+
+    const isPlayerTurn = this.currentState?.activeSide === 'player';
+    const isInteractive = isPlayerTurn && this.currentState?.phase === 'ACTION';
+    const playable = this.currentState ? isSpellCardPlayable(this.currentState, view.config.contentId) : false;
+
+    let targetVisualState: CardVisualState = 'IDLE';
+    if (!isPlayerTurn || !isInteractive || !playable) {
+      targetVisualState = 'DISABLED';
+    } else if (playable) {
+      targetVisualState = 'PLAYABLE';
+    }
+
+    view.setVisualState(targetVisualState);
+    view.setDepth(view.restX); // Depth corresponds to x coordinate ordering
+
+    this.scene.tweens.add({
+      targets: view,
+      x: view.restX,
+      y: view.restY,
+      angle: view.restRotation * (180 / Math.PI),
+      scaleX: view.restScale,
+      scaleY: view.restScale,
+      duration: 150,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        view.updateMaskGeometry();
+      },
+    });
   }
 
   public setVisible(visible: boolean): void {
@@ -39,6 +158,12 @@ export class CombatHandView {
     this.cardViews.forEach((view) => {
       view.setVisible(visible);
     });
+
+    if (!visible && this.hoveredCardId) {
+      const oldView = this.cardViews.get(this.hoveredCardId);
+      if (oldView) this.playHoverExit(oldView);
+      this.hoveredCardId = null;
+    }
   }
 
   public render(state: CombatState): void {
@@ -78,6 +203,10 @@ export class CombatHandView {
             view.destroy();
           },
         });
+        
+        if (this.hoveredCardId === instanceId) {
+          this.hoveredCardId = null;
+        }
         this.cardViews.delete(instanceId);
       }
     });
@@ -90,12 +219,12 @@ export class CombatHandView {
     this.backgroundTray?.setVisible(true);
 
     // 2. Calculate transforms for fanning
-    // Safe tray coordinates: x: 265 to 695 (width 430), centerY around 474-485, y bottom edge ~535
+    // Sized larger Spell hand coordinates: x: 340 to 820 (width 480), centerY around 475, y bottom edge ~570
     const transforms = calculateHandLayout(
       spellsInHand.length,
-      480,    // centerX
-      474,    // baseY
-      430,    // availableWidth
+      580,    // centerX
+      475,    // baseY
+      440,    // availableWidth
       false,  // isBench
     );
 
@@ -119,111 +248,62 @@ export class CombatHandView {
         view.setAlpha(0);
         view.setScale(0.9);
         this.cardViews.set(spellCard.instanceId, view);
-
-        // Bind play trigger interaction dynamically to prevent stale state closures
-        view.on('pointerdown', () => {
-          const current = this.currentState;
-          if (current) {
-            const isCurrentPlayerTurn = current.activeSide === 'player';
-            const isCurrentInteractive = isCurrentPlayerTurn && current.phase === 'ACTION';
-            if (isCurrentInteractive && isSpellCardPlayable(current, spellCard.spellId)) {
-              this.play(spellCard.spellId);
-            }
-          }
-        });
       }
 
-      // Determine visual state
-      let targetVisualState: CardVisualState = 'IDLE';
-      if (shouldDimHand) {
-        targetVisualState = 'DISABLED';
-      } else if (!isInteractive || !playable) {
-        targetVisualState = 'DISABLED';
-      } else if (playable) {
-        targetVisualState = 'PLAYABLE';
-      }
+      // Track explicit rest transform
+      view.setRestTransform(transform.x, transform.y, transform.rotation, transform.scale);
 
-      view.setVisualState(targetVisualState);
-      view.setDepth(transform.depth);
+      // Disable default interactive mouse-events on CardView itself to avoid races
+      view.disableInteractive();
 
-      // Stop any active movement tween first to avoid stacked tweens on pointer moves
-      this.scene.tweens.killTweensOf(view);
-
-      // Tween to the fanned transform (duration 180-260ms, ease Cubic.Out)
-      this.scene.tweens.add({
-        targets: view,
-        x: transform.x,
-        y: transform.y,
-        angle: transform.rotation * (180 / Math.PI), // convert to degrees
-        scaleX: transform.scale,
-        scaleY: transform.scale,
-        alpha: shouldDimHand ? 0.45 : 1.0,
-        duration: isNew ? 220 : 200,
-        ease: 'Cubic.Out',
-        onUpdate: () => {
-          view?.updateMaskGeometry();
-        },
-      });
-
-      // Special hover interaction overlay lift:
-      // Hover raises Y position, sets rotation 0, highest depth, art parallax
-      if (isInteractive && playable) {
-        // Re-enable interactivity
-        view.setInteractive();
-
-        view.removeAllListeners('pointerover');
-        view.removeAllListeners('pointerout');
-
-        const originalDepth = transform.depth;
-
-        view.on('pointerover', () => {
-          this.scene.tweens.killTweensOf(view!);
-          view!.setVisualState('HOVER');
-          view!.setDepth(80); // highest CARD_HOVER depth
-
-          this.scene.tweens.add({
-            targets: view,
-            y: transform.y - 32, // Lift card up
-            angle: 0,            // Straighten card
-            scaleX: 1.22,        // Scale up
-            scaleY: 1.22,
-            duration: 130,
-            ease: 'Cubic.Out',
-            onUpdate: () => {
-              view?.updateMaskGeometry();
-            },
-          });
-        });
-
-        view.on('pointerout', () => {
-          this.scene.tweens.killTweensOf(view!);
-          view!.setVisualState('PLAYABLE');
-          view!.setDepth(originalDepth);
-
-          this.scene.tweens.add({
-            targets: view,
-            x: transform.x,
-            y: transform.y,
-            angle: transform.rotation * (180 / Math.PI),
-            scaleX: transform.scale,
-            scaleY: transform.scale,
-            duration: 160,
-            ease: 'Cubic.Out',
-            onUpdate: () => {
-              view?.updateMaskGeometry();
-            },
-          });
-        });
+      // If we are currently hovering this card, keep its hovered presentation
+      if (this.hoveredCardId === spellCard.instanceId) {
+        view.setVisualState('HOVER');
+        view.setDepth(80);
       } else {
-        // Lock/disable interactivity
-        view.disableInteractive();
+        // Determine visual state
+        let targetVisualState: CardVisualState = 'IDLE';
+        if (shouldDimHand) {
+          targetVisualState = 'DISABLED';
+        } else if (!isInteractive || !playable) {
+          targetVisualState = 'DISABLED';
+        } else if (playable) {
+          targetVisualState = 'PLAYABLE';
+        }
+
+        view.setVisualState(targetVisualState);
+        view.setDepth(transform.depth);
+
+        // Stop any active movement tween first to avoid stacked tweens on pointer moves
+        this.scene.tweens.killTweensOf(view);
+
+        // Tween to the fanned transform (duration 180-260ms, ease Cubic.Out)
+        this.scene.tweens.add({
+          targets: view,
+          x: transform.x,
+          y: transform.y,
+          angle: transform.rotation * (180 / Math.PI), // convert to degrees
+          scaleX: transform.scale,
+          scaleY: transform.scale,
+          alpha: shouldDimHand ? 0.45 : 1.0,
+          duration: isNew ? 220 : 200,
+          ease: 'Cubic.Out',
+          onUpdate: () => {
+            view?.updateMaskGeometry();
+          },
+        });
       }
     });
   }
 
   public destroy(): void {
+    // Unbind centralized hover arbitration and click handlers cleanly on destruction
+    this.scene.input.off('pointermove', this.handlePointerMove, this);
+    this.scene.input.off('pointerdown', this.handlePointerDown, this);
+
     this.backgroundTray?.destroy();
     this.cardViews.forEach((view) => view.destroy());
     this.cardViews.clear();
+    this.hoveredCardId = null;
   }
 }
