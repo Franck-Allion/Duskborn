@@ -591,18 +591,18 @@ Spell hand -> bottom center, slightly fanned, always visible during player turn
 Creature bench -> lower-left/lower-side adjacent to board
 ```
 
-- [ ] Render Spell hand throughout full player turn
-- [ ] Render Creature bench throughout full player turn
-- [ ] Never hide Spell hand during deployment
-- [ ] Keep opponent card identities hidden
+- [x] Render Spell hand throughout full player turn
+- [x] Render Creature bench throughout full player turn
+- [x] Never hide Spell hand during deployment
+- [x] Keep opponent card identities hidden
 - [ ] Show opponent card counts only where useful
-- [ ] Keep Hearthstone-like bottom-center hand silhouette without copying assets
-- [ ] Keep board interaction unobstructed
-- [ ] Support 960x540 logical canvas and responsive fitting
-- [ ] Support high-DPI text/textures
-- [ ] Add `CombatHandView` / equivalent
-- [ ] Add `CreatureBenchView` / equivalent
-- [ ] Views rebuild from domain state, never own gameplay card state
+- [x] Keep Hearthstone-like bottom-center hand silhouette without copying assets
+- [x] Keep board interaction unobstructed
+- [x] Support 960x540 logical canvas and responsive fitting
+- [x] Support high-DPI text/textures
+- [x] Add `CombatHandView` / equivalent
+- [x] Add `CreatureBenchView` / equivalent
+- [x] Views rebuild from domain state, never own gameplay card state
 
 ---
 

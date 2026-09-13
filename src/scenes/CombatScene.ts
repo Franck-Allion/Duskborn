@@ -29,7 +29,8 @@ import {
 import type { RunState } from '../game/core/RunState';
 import { fitSceneToCanvas } from '../ui/fitSceneToCanvas';
 import { CombatActionPanel } from '../ui/CombatActionPanel';
-import { SpellHandView } from '../ui/SpellHandView';
+import { CombatHandView } from '../ui/CombatHandView';
+import { CreatureBenchView } from '../ui/CreatureBenchView';
 import { commitPlayerAttack, canReturnToMap } from '../game/combat/CombatInteraction';
 import {
   createInitialPlayerCombatDeck,
@@ -56,7 +57,8 @@ export class CombatScene extends Phaser.Scene {
   private deploymentHint!: Phaser.GameObjects.Text;
   private sidebarTitle!: Phaser.GameObjects.Text;
   private actionPanel!: CombatActionPanel;
-  private spellHand!: SpellHandView;
+  private spellHand!: CombatHandView;
+  private creatureBench!: CreatureBenchView;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
   private turnText!: Phaser.GameObjects.Text;
@@ -226,8 +228,12 @@ export class CombatScene extends Phaser.Scene {
     this.selectionText = this.add.text(148, 463, '', {
       fontFamily: 'monospace', fontSize: '11px', color: '#cbd5e1',
     });
-    this.spellHand = new SpellHandView(this, (spellId) => {
+    this.spellHand = new CombatHandView(this, (spellId) => {
       playSpell(this.combatState, 'player', spellId);
+      this.refreshDeploymentUI();
+    });
+    this.creatureBench = new CreatureBenchView(this, (squadIndex) => {
+      this.selectedSquadIndex = squadIndex;
       this.refreshDeploymentUI();
     });
     this.actionPanel = new CombatActionPanel(this,
@@ -355,7 +361,8 @@ export class CombatScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, cancelDrag);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.actionPanel.clear();
-      this.spellHand.clear();
+      this.spellHand.destroy();
+      this.creatureBench.destroy();
       this.input.off('dragstart', this.startSquadDrag, this);
       this.input.off('drag', this.moveSquadDrag, this);
       this.input.off('dragend', this.endSquadDrag, this);
@@ -474,7 +481,9 @@ export class CombatScene extends Phaser.Scene {
     }
 
     this.actionPanel.clear();
-    this.spellHand.render(this.combatState);
+    this.spellHand.refresh(this.combatState);
+    this.creatureBench.setSelectedSquadIndex(this.selectedSquadIndex);
+    this.creatureBench.refresh(this.combatState);
     this.confirmButtonVisuals.forEach((visual) => visual.destroy());
     this.confirmButtonVisuals = [];
     this.sidebarTitle.setText(this.combatState.phase === 'DEPLOYMENT'
@@ -644,93 +653,12 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    // 4. Render available squad cards on right sidebar
+    // 4. Old right-sidebar available squads cards removed to prioritize CreatureBenchView
     const sidebarX = 740;
     const sidebarY = 150;
     const cardWidth = 150;
     const cardHeight = 60;
     const cardGap = 20;
-
-    this.combatState.playerSquads.forEach((squad, index) => {
-      const y = sidebarY + index * (cardHeight + cardGap);
-
-      const isSelected = this.selectedSquadIndex === index;
-      const isPlaced = squad.position !== null;
-
-      // Selectable Card Background
-      const bgColor = isSelected ? 0x1e3a8a : 0x1e293b; // blue selection, slate neutral
-      const strokeColor = isSelected
-        ? 0x60a5fa
-        : isPlaced
-          ? 0x475569
-          : 0x94a3b8; // sky blue highlight, gray placed, slate unplaced
-      const strokeWidth = isSelected ? 3 : 1;
-
-      const bg = this.add
-        .rectangle(
-          sidebarX + cardWidth / 2,
-          y + cardHeight / 2,
-          cardWidth,
-          cardHeight,
-          bgColor,
-        )
-        .setStrokeStyle(strokeWidth, strokeColor);
-
-      // Reserve cards follow the same phase and survival rules as grid squads.
-      if (this.canPlayerDeploy() && squad.count > 0) {
-        bg.setInteractive({ cursor: 'grab', draggable: true });
-        bg.setData('type', 'card');
-        bg.setData('squadIndex', index);
-
-        bg.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-          const down = this.cameras.main.getWorldPoint(
-            pointer.downX,
-            pointer.downY,
-          );
-          if (
-            !this.canPlayerDeploy() ||
-            squad.count <= 0 ||
-            this.currentDragSquadIndex !== null ||
-            !bg.getBounds().contains(down.x, down.y)
-          )
-            return;
-          if (this.selectedSquadIndex === index) {
-            this.selectedSquadIndex = null; // deselect if clicked again
-          } else {
-            this.selectedSquadIndex = index;
-          }
-          this.refreshDeploymentUI();
-        });
-
-        this.input.setDraggable(bg, true);
-      }
-
-      // Name / Count labels
-      const displayName =
-        squad.unitTypeId === 'guardian' ? 'Guardians' : 'Archers';
-      const titleText = this.add.text(
-        sidebarX + 12,
-        y + 12,
-        `${displayName} x${squad.count}`,
-        {
-          fontFamily: 'monospace',
-          fontSize: '14px',
-          fontStyle: 'bold',
-          color: isSelected ? '#ffffff' : '#f1f5f9',
-        },
-      );
-
-      // Placement status
-      const statusText = isPlaced ? 'Placed' : 'Not Deployed';
-      const statusColor = isPlaced ? '#94a3b8' : '#f87171'; // gray vs red warning
-      const subtitleText = this.add.text(sidebarX + 12, y + 34, statusText, {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: statusColor,
-      });
-
-      this.availableSquadVisuals.push(bg, titleText, subtitleText);
-    });
 
     // 5. Clean up and render the Confirm Deployment action button
     this.confirmButtonVisuals.forEach((v) => v.destroy());
