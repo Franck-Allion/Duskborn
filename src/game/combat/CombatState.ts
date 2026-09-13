@@ -572,7 +572,7 @@ export function canSwapSquads(
     return false;
   }
 
-  if (squadA.position === null || squadB.position === null) {
+  if (squadA.position === null && squadB.position === null) {
     return false;
   }
 
@@ -588,8 +588,54 @@ export function canSwapSquads(
   tempSquadA.position = posB;
   tempSquadB.position = posA;
 
-  // Validate the final prospective swapped board
-  return isSideDeploymentValid(tempState, side);
+  // Validate the final prospective swapped board:
+  // 1. Verify positioned squads are in the correct deployment zone
+  const activePlayerSquads = tempState.playerSquads.filter((s) => s.count > 0);
+  const activeEnemySquads = tempState.enemySquads.filter((s) => s.count > 0);
+
+  for (const squad of activePlayerSquads) {
+    if (squad.position !== null && !isPlayerDeploymentPosition(squad.position)) {
+      return false;
+    }
+  }
+  for (const squad of activeEnemySquads) {
+    if (squad.position !== null && !isEnemyDeploymentPosition(squad.position)) {
+      return false;
+    }
+  }
+
+  // 2. Verify no duplicate occupancy across all positioned active squads
+  const occupied = new Set<string>();
+  for (const squad of [...activePlayerSquads, ...activeEnemySquads]) {
+    if (squad.position !== null) {
+      const key = `${squad.position.column},${squad.position.row}`;
+      if (occupied.has(key)) {
+        return false;
+      }
+      occupied.add(key);
+    }
+  }
+
+  // 3. Verify no duplicate unit types on either side
+  if (
+    hasDuplicateUnitTypes(activePlayerSquads) ||
+    hasDuplicateUnitTypes(activeEnemySquads)
+  ) {
+    return false;
+  }
+
+  // 4. Validate lane coverage if the board is fully deployed
+  const allActiveDeployed = tempState.playerSquads
+    .filter((s) => s.count > 0)
+    .every((s) => s.position !== null);
+
+  if (allActiveDeployed) {
+    if (!isSideDeploymentValid(tempState, side)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**

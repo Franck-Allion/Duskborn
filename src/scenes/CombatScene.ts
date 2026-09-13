@@ -8,6 +8,7 @@ import {
 } from '../game/combat/CombatGrid';
 import type { CombatPosition } from '../game/combat/CombatPosition';
 import type { CombatState } from '../game/combat/CombatState';
+import type { Squad } from '../game/combat/Squad';
 import {
   isSideDeploymentValid,
   getUncoveredOpponentColumns,
@@ -348,15 +349,12 @@ export class CombatScene extends Phaser.Scene {
     );
   }
 
-  private canPlacePlayerSquad(
-    index: number,
+  private getPlayerSquadAtPosition(
     position: CombatPosition,
-  ): boolean {
-    const squad = this.combatState.playerSquads[index];
-    return (
-      !!squad &&
-      canRepositionSquad(this.combatState, 'player', squad.unitTypeId, position)
-    );
+  ): Squad | null {
+    return this.combatState.playerSquads.find(
+      (s) => s.count > 0 && s.position?.column === position.column && s.position?.row === position.row
+    ) ?? null;
   }
 
   private canPlaceOrSwapPlayerSquad(
@@ -373,10 +371,8 @@ export class CombatScene extends Phaser.Scene {
 
     // 2. Can we do a swap? (Only during drag-and-drop)
     if (this.currentDragSquadIndex !== null) {
-      const otherSquad = this.combatState.playerSquads.find(
-        (s) => s.position?.column === position.column && s.position?.row === position.row
-      );
-      if (otherSquad && otherSquad.count > 0 && otherSquad.unitTypeId !== squad.unitTypeId) {
+      const otherSquad = this.getPlayerSquadAtPosition(position);
+      if (otherSquad && otherSquad.unitTypeId !== squad.unitTypeId) {
         return canSwapSquads(this.combatState, 'player', squad.unitTypeId, otherSquad.unitTypeId);
       }
     }
@@ -906,7 +902,7 @@ x${squad.count}`,
     const valid =
       target !== null &&
       this.currentDragSquadIndex !== null &&
-      this.canPlacePlayerSquad(this.currentDragSquadIndex, target);
+      this.canPlaceOrSwapPlayerSquad(this.currentDragSquadIndex, target);
     const previewBg = this.dragPreview.first as Phaser.GameObjects.Rectangle;
     previewBg.setStrokeStyle(
       2,
@@ -934,24 +930,47 @@ x${squad.count}`,
     )
       return;
     this.dragSettling = true;
-    const accepted =
-      this.canPlayerDeploy() &&
-      target !== null &&
-      repositionSquad(
-        this.combatState,
-        'player',
-        this.combatState.playerSquads[index].unitTypeId,
-        target,
-      );
-    const destination = accepted
+
+    let accepted = false;
+    let isSwap = false;
+
+    if (this.canPlayerDeploy() && target !== null) {
+      const movingSquad = this.combatState.playerSquads[index];
+      const occupyingSquad = this.getPlayerSquadAtPosition(target);
+
+      if (
+        occupyingSquad &&
+        occupyingSquad.unitTypeId !== movingSquad.unitTypeId
+      ) {
+        accepted = swapSquads(
+          this.combatState,
+          'player',
+          movingSquad.unitTypeId,
+          occupyingSquad.unitTypeId,
+        );
+        isSwap = accepted;
+      } else {
+        accepted = repositionSquad(
+          this.combatState,
+          'player',
+          movingSquad.unitTypeId,
+          target,
+        );
+      }
+    }
+
+    const destination = accepted && target !== null
       ? this.cells[target.row][target.column]
       : this.dragSource;
-    this.deploymentHint.setText(
-      accepted
-        ? 'Squad placed. Drag it again to reposition.'
-        : 'Placement cancelled. Squad returned to its original position.',
-    );
-    this.deploymentHint.setColor(accepted ? '#86efac' : '#fca5a5');
+
+    if (accepted) {
+      this.deploymentHint.setText(isSwap ? 'Squads swapped.' : 'Squad repositioned.');
+      this.deploymentHint.setColor('#86efac');
+    } else {
+      this.deploymentHint.setText('Placement cancelled.');
+      this.deploymentHint.setColor('#fca5a5');
+    }
+
     this.refreshPlacementFeedback();
     this.input.setDefaultCursor('default');
 
@@ -986,7 +1005,7 @@ x${squad.count}`,
         const player = isPlayerDeploymentPosition(position);
         const active =
           index !== null && this.canPlayerDeploy() && !this.dragSettling;
-        const valid = active && this.canPlacePlayerSquad(index, position);
+        const valid = active && this.canPlaceOrSwapPlayerSquad(index, position);
         const over =
           active &&
           hovered?.column === position.column &&
@@ -1010,7 +1029,7 @@ x${squad.count}`,
       }
     }
     if (index !== null && !this.dragSettling && this.canPlayerDeploy()) {
-      const valid = hovered && this.canPlacePlayerSquad(index, hovered);
+      const valid = hovered && this.canPlaceOrSwapPlayerSquad(index, hovered);
       this.deploymentHint.setText(
         hovered
           ? valid
