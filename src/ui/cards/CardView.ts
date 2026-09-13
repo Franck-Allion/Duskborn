@@ -46,6 +46,9 @@ export class CardView extends Phaser.GameObjects.Container {
   protected artBaseX: number = 0;
   protected artBaseY: number = 0;
 
+  protected glowFilter: unknown = null;
+  protected colorMatrixFilter: unknown = null;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -268,6 +271,33 @@ export class CardView extends Phaser.GameObjects.Container {
       ).setOrigin(0.5).setResolution(fontRes);
       this.add(this.badgeText);
     }
+
+    // Initialize native filters once lazily
+    this.applyPhaser4Filters();
+  }
+
+  private applyPhaser4Filters(): void {
+    try {
+      const targets = [this.frame, this.art].filter((t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image);
+      for (const img of targets) {
+        const imgWithFilters = img as unknown as {
+          enableFilters?: () => void;
+          filters?: { glow?: unknown; colorMatrix?: unknown };
+        };
+        if (typeof imgWithFilters.enableFilters === 'function') {
+          imgWithFilters.enableFilters();
+          
+          if (!this.glowFilter && imgWithFilters.filters?.glow) {
+            this.glowFilter = imgWithFilters.filters.glow;
+          }
+          if (!this.colorMatrixFilter && imgWithFilters.filters?.colorMatrix) {
+            this.colorMatrixFilter = imgWithFilters.filters.colorMatrix;
+          }
+        }
+      }
+    } catch {
+      // Safe fallback
+    }
   }
 
   private setupInteractions(): void {
@@ -297,15 +327,15 @@ export class CardView extends Phaser.GameObjects.Container {
 
     this.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.visualState === 'HOVER') {
-        // Pointer position relative to container center
-        const localX = pointer.x - this.x;
-        const localY = pointer.y - this.y;
+        // Convert world/screen pointer position into CardView-local coordinates via Matrix Inversion
+        const matrix = this.getWorldTransformMatrix();
+        const localPoint = matrix.applyInverse(pointer.worldX, pointer.worldY);
 
         const halfW = this.widthVal / 2;
         const halfH = this.heightVal / 2;
 
-        const normalizedX = Phaser.Math.Clamp(localX / halfW, -1, 1);
-        const normalizedY = Phaser.Math.Clamp(localY / halfH, -1, 1);
+        const normalizedX = Phaser.Math.Clamp(localPoint.x / halfW, -1, 1);
+        const normalizedY = Phaser.Math.Clamp(localPoint.y / halfH, -1, 1);
 
         const px = normalizedX * 2.5; // max +-2.5 px
         const py = normalizedY * 1.5; // max +-1.5 px
@@ -386,18 +416,41 @@ export class CardView extends Phaser.GameObjects.Container {
 
     // 2. Playable & Hover effects via Phaser 4 native filter triggers (if supported/practical)
     try {
-      const targets = [this.frame, this.art].filter((t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image);
-      
-      for (const img of targets) {
-        if (state === 'DISABLED' || state === 'DEPLOYED') {
-          // Native Gray/Desaturate fallback
-          img.setTint(0x7f7f7f);
+      if (this.glowFilter) {
+        const glow = this.glowFilter as { enable: () => void; disable: () => void; radius: number; color: number };
+        if (state === 'HOVER') {
+          glow.enable();
+          glow.radius = 16;
+          glow.color = 0xfca5a5; // lighter
+        } else if (state === 'PLAYABLE') {
+          glow.enable();
+          glow.radius = 10;
+          glow.color = 0x60a5fa; // blue
+        } else if (state === 'SELECTED') {
+          glow.enable();
+          glow.radius = 12;
+          glow.color = 0xfbbf24; // golden
         } else {
-          img.clearTint();
+          glow.disable();
+        }
+      }
+
+      if (this.colorMatrixFilter) {
+        const matrix = this.colorMatrixFilter as { enable: () => void; disable: () => void; desaturate: () => void; brightness: (v: number) => void };
+        if (state === 'DISABLED') {
+          matrix.enable();
+          matrix.desaturate();
+          matrix.brightness(0.65);
+        } else if (state === 'DEPLOYED') {
+          matrix.enable();
+          matrix.desaturate();
+          matrix.brightness(0.85); // milder desat for deployed
+        } else {
+          matrix.disable();
         }
       }
     } catch {
-      // Safe fallback if native filters fail or aren't supported on canvas
+      // Safe fallback
     }
 
     // 3. Fallback alpha overlay adjustments
