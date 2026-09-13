@@ -196,25 +196,26 @@ describe('symmetric lane-coverage reposition rules', () => {
     expect(state.phase).toBe('ACTION');
   });
 
-  it('fails confirmDeployment if opponent has 3 occupied columns but active side has only 2 squads', () => {
+  it('handles 2 friendly squads vs 3 opponent columns (valid when any 2 distinct opponent columns are covered, invalid if only 1 covered)', () => {
     const state = createBaseState();
-    // Enemy occupies columns 1, 3, 5
-    state.enemySquads[0].position = { column: 1, row: 1 };
-    state.enemySquads[1].position = { column: 3, row: 1 };
-    state.enemySquads.push({
-      unitTypeId: 'duskborn-grunt-3',
-      count: 1,
-      damagedUnitHp: null,
-      position: { column: 5, row: 0 },
-    });
+    // Enemy occupies columns 1, 3, 5 with all positioned correctly
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 1, damagedUnitHp: null, position: { column: 1, row: 1 } },
+      { unitTypeId: 'duskborn-archer', count: 1, damagedUnitHp: null, position: { column: 3, row: 1 } },
+      { unitTypeId: 'duskborn-grunt-3', count: 1, damagedUnitHp: null, position: { column: 5, row: 0 } },
+    ];
 
     // Player has only 2 surviving squads
+    // Scenario 1: both player squads are in column 1 (only 1 covered -> invalid!)
     state.playerSquads[0].position = { column: 1, row: 2 };
-    state.playerSquads[1].position = { column: 3, row: 2 };
-
-    // Player cannot cover all 3 columns simultaneously, so confirmation fails!
+    state.playerSquads[1].position = { column: 1, row: 3 };
     expect(isSideDeploymentValid(state, 'player')).toBe(false);
     expect(confirmDeployment(state)).toBe(false);
+
+    // Scenario 2: player squads cover columns 1 and 5 (2 distinct covered -> valid under max coverage!)
+    state.playerSquads[1].position = { column: 5, row: 2 };
+    expect(isSideDeploymentValid(state, 'player')).toBe(true);
+    expect(confirmDeployment(state)).toBe(true);
   });
 
   it('allows confirmDeployment if enemy has no surviving positioned squads', () => {

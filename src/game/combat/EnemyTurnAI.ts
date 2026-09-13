@@ -9,6 +9,7 @@ import {
   resolveActiveSideAttack,
   endTurn,
   getCombatResult,
+  getUncoveredOpponentColumns,
 } from './CombatState';
 import {
   GRID_COLUMNS,
@@ -37,18 +38,35 @@ export function runEnemyTurn(state: CombatState): boolean {
   // Reposition surviving enemy squads deterministically.
   const survivingEnemySquads = state.enemySquads.filter((s) => s.count > 0);
 
-  // Preference order of positions: all FRONT (row 1) by ascending column (0 to 5), then BACK (row 0)
-  const candidatePositions: CombatPosition[] = [];
-  // FRONT
-  for (let col = 0; col < GRID_COLUMNS; col++) {
-    candidatePositions.push({ column: col, row: ROW_ENEMY_FRONT });
-  }
-  // BACK
-  for (let col = 0; col < GRID_COLUMNS; col++) {
-    candidatePositions.push({ column: col, row: ROW_ENEMY_BACK });
-  }
-
   for (const squad of survivingEnemySquads) {
+    // Prioritize candidates: uncovered opponent-occupied columns first (ensures maximum coverage count is reached first)
+    const uncoveredCols = getUncoveredOpponentColumns(state, 'enemy');
+    const uncoveredColsSet = new Set(uncoveredCols);
+
+    const coveragePositions: CombatPosition[] = [];
+    const otherPositions: CombatPosition[] = [];
+
+    // FRONT
+    for (let col = 0; col < GRID_COLUMNS; col++) {
+      const pos = { column: col, row: ROW_ENEMY_FRONT };
+      if (uncoveredColsSet.has(col)) {
+        coveragePositions.push(pos);
+      } else {
+        otherPositions.push(pos);
+      }
+    }
+    // BACK
+    for (let col = 0; col < GRID_COLUMNS; col++) {
+      const pos = { column: col, row: ROW_ENEMY_BACK };
+      if (uncoveredColsSet.has(col)) {
+        coveragePositions.push(pos);
+      } else {
+        otherPositions.push(pos);
+      }
+    }
+
+    const candidatePositions = [...coveragePositions, ...otherPositions];
+
     // Find the first candidate position that is currently legal
     let preferredPos: CombatPosition | null = null;
     for (const pos of candidatePositions) {

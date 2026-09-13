@@ -222,7 +222,8 @@ export function spendMana(
  * Checks if the combat deployment state is currently valid for a specific side.
  * Validation conditions:
  * 1. The overall deployment structures must be valid (isDeploymentValid).
- * 2. Every lane containing at least one surviving opposing squad must be covered by at least one surviving positioned friendly squad of the given side.
+ * 2. The side must cover as many distinct surviving opponent-occupied lanes as its
+ *    number of surviving squads permits: covered opponent lanes >= min(surviving friendly squads, opponent occupied columns).
  */
 export function isSideDeploymentValid(
   state: CombatState,
@@ -232,12 +233,10 @@ export function isSideDeploymentValid(
     return false;
   }
 
-  const uncovered = getUncoveredOpponentColumns(state, side);
-  if (uncovered.length > 0) {
-    return false;
-  }
+  const required = getRequiredCoverageCount(state, side);
+  const covered = getCoveredOpponentColumns(state, side);
 
-  return true;
+  return covered.length >= required;
 }
 
 /**
@@ -362,6 +361,56 @@ export function getEngagedColumns(
 }
 
 /**
+ * Finds all column indices containing at least one surviving positioned opposing squad.
+ */
+export function getOpponentOccupiedColumns(
+  state: CombatState,
+  side: CombatSide,
+): number[] {
+  const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
+  const columns = opponents
+    .filter((s) => s.count > 0 && s.position !== null)
+    .map((s) => s.position!.column);
+  return Array.from(new Set(columns));
+}
+
+/**
+ * Returns the list of opponent-occupied columns that also contain at least one
+ * surviving positioned friendly squad (excluding the specified one if any).
+ */
+export function getCoveredOpponentColumns(
+  state: CombatState,
+  side: CombatSide,
+  excludedUnitTypeId?: string,
+): number[] {
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const opponentCols = getOpponentOccupiedColumns(state, side);
+
+  const friendlyCols = new Set(
+    squads
+      .filter((s) => s.count > 0 && s.position !== null && s.unitTypeId !== excludedUnitTypeId)
+      .map((s) => s.position!.column)
+  );
+
+  return opponentCols.filter((col) => friendlyCols.has(col));
+}
+
+/**
+ * Finds the minimum required covered columns count based on maximum achievable coverage:
+ * Math.min(surviving friendly squads, distinct opposing occupied columns).
+ */
+export function getRequiredCoverageCount(
+  state: CombatState,
+  side: CombatSide,
+): number {
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const survivingFriendlies = squads.filter((s) => s.count > 0);
+  const opponentCols = getOpponentOccupiedColumns(state, side);
+
+  return Math.min(survivingFriendlies.length, opponentCols.length);
+}
+
+/**
  * Finds all columns containing at least one surviving positioned opposing squad
  * that are currently NOT covered by at least one surviving positioned friendly squad of the given side.
  * Symmetrically ignores dead squads and unpositioned squads.
@@ -373,32 +422,9 @@ export function getUncoveredOpponentColumns(
   side: CombatSide,
   excludedUnitTypeId?: string,
 ): number[] {
-  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
-  const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
-
-  // 1. Identify all opponent-occupied columns
-  const opposingOccupiedColumns = new Set(
-    opponents
-      .filter((s) => s.count > 0 && s.position !== null)
-      .map((s) => s.position!.column)
-  );
-
-  // 2. Identify columns covered by surviving positioned squads on our side (excluding the specified one if any)
-  const friendlyColumns = new Set(
-    squads
-      .filter((s) => s.count > 0 && s.position !== null && s.unitTypeId !== excludedUnitTypeId)
-      .map((s) => s.position!.column)
-  );
-
-  // 3. Return opponent columns that are not present in the friendly occupied-column set
-  const uncovered: number[] = [];
-  for (const col of opposingOccupiedColumns) {
-    if (!friendlyColumns.has(col)) {
-      uncovered.push(col);
-    }
-  }
-
-  return uncovered;
+  const opponentCols = getOpponentOccupiedColumns(state, side);
+  const coveredCols = new Set(getCoveredOpponentColumns(state, side, excludedUnitTypeId));
+  return opponentCols.filter((col) => !coveredCols.has(col));
 }
 
 /**
@@ -462,10 +488,13 @@ export function canRepositionSquad(
     return false;
   }
 
-  // 5.5 Lane engagement validation using the symmetric coverage rule
-  const requiredCols = getUncoveredOpponentColumns(state, side, unitTypeId);
-  if (requiredCols.length > 0) {
-    if (!requiredCols.includes(targetPosition.column)) {
+  // 5.5 Lane engagement validation using maximum achievable coverage
+  const otherCovered = getCoveredOpponentColumns(state, side, unitTypeId);
+  const required = getRequiredCoverageCount(state, side);
+
+  if (otherCovered.length < required) {
+    const uncoveredByOthers = getUncoveredOpponentColumns(state, side, unitTypeId);
+    if (!uncoveredByOthers.includes(targetPosition.column)) {
       return false;
     }
   }

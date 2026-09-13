@@ -651,9 +651,12 @@ During `DEPLOYMENT`, the active side may reposition its surviving squads within 
 
 ### Lane engagement restriction
 
-Use this MVP rule:
+During deployment, a side must cover as many distinct surviving opponent-occupied lanes as its number of surviving squads permits.
 
-> If the opposing side has at least one surviving positioned squad, a squad being deployed or repositioned may only be placed in a column currently occupied by at least one opposing squad.
+Required covered lanes =
+min(surviving friendly squads, distinct surviving opponent-occupied lanes).
+
+Once that required coverage is reached, additional squads may occupy other legal lanes.
 
 Example:
 
