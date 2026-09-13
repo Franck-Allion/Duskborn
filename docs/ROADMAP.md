@@ -1008,204 +1008,803 @@ Success condition:
 
 ---
 
-## 0.6.18 Combat UI and Replaceable Visual Assets
+## 0.6.18 Combat Interaction and Information Architecture
 
-Keep UI simple but readable.
+Before adding final visual polish, make combat interaction feel natural and make the current tactical state immediately understandable.
 
-Already completed UI foundations should be reused:
+The player should never need to understand internal state-machine transitions in order to play.
 
-```text
-6×4 grid
-squad rendering
-deployment interaction
-drag-and-drop
-```
+### Combat HUD
 
-Add/display:
+Display permanently:
 
 * [ ] active side
 * [ ] current combat turn
-* [ ] current combat phase
+* [ ] current combat phase using player-friendly wording
 * [ ] player hero HP
 * [ ] enemy hero HP
-* [ ] player current/max Mana
-* [ ] enemy current/max Mana where useful
-* [ ] player spell hand
-* [ ] spell Mana costs
-* [ ] available squad abilities
-* [ ] ability Mana costs
-* [ ] selected ability per active squad
-* [ ] legal deployment cells during DEPLOYMENT
-* [ ] illegal empty lanes when lane engagement restriction applies
-* [ ] Confirm Attack button
-* [ ] attack/result feedback
-* [ ] victory / defeat panel
+* [ ] hero shields when active
+* [ ] player current / max Mana
+* [ ] enemy Mana where useful
+* [ ] squad count and current partial-unit HP
+* [ ] unit-type level where relevant
+* [ ] selected ability per player squad
 
-### Replaceable unit and spell PNG assets
+Avoid presenting implementation terminology such as `RESOLUTION` as an action the player must manually advance.
 
-Units and spells must be represented visually, not only by text.
+### Context-sensitive controls
 
-Use replaceable PNG assets so placeholder artwork can later be replaced without changing game logic.
+The combat UI must expose only actions meaningful in the current phase.
 
-Content definitions should reference their visual asset.
+```text
+DEPLOYMENT
+→ reposition squads
+→ Confirm Deployment
+
+ACTION
+→ inspect/select squad abilities
+→ inspect/play spells
+→ Confirm Attack
+
+RESOLUTION
+→ no gameplay confirmation
+→ automatic presentation of resolved actions
+
+ENEMY TURN
+→ no player controls
+→ observe enemy actions
+
+VICTORY / DEFEAT
+→ result panel
+```
+
+* [ ] Remove any player-facing "Resolve Attack" / "Continue Resolution" button
+* [ ] Confirm Attack immediately commits the prepared attack
+* [ ] Automatically begin visual resolution after confirmation
+* [ ] Automatically transition after completed visual resolution when combat is still ongoing
+* [ ] Keep domain phase transitions authoritative
+* [ ] Prevent UI controls from exposing internal orchestration steps
+
+Success condition:
+
+> The player understands what they can do without needing to understand the combat state machine.
+
+---
+
+## 0.6.19 Visual Hand, Draw and Card Interaction
+
+Spells should behave and read like actual cards rather than text commands.
+
+The goal is not to reproduce a full collectible-card-game interface, but to make drawing and playing a spell satisfying and obvious.
+
+### Hand
+
+* [ ] Render the player's hand persistently during ACTION
+* [ ] Give every spell a replaceable card image / artwork
+* [ ] Display spell name
+* [ ] Display Mana cost
+* [ ] Display concise effect text
+* [ ] Visually distinguish affordable and unaffordable cards
+* [ ] Allow hover / pointer focus to enlarge or inspect a card
+* [ ] Keep cards readable at supported resolutions
+* [ ] Fan or arrange cards clearly when multiple cards are held
+
+### Draw presentation
+
+At `TURN_START`:
+
+```text
+deck
+↓
+draw card
+↓
+card visibly enters hand
+```
+
+* [ ] Display a draw pile / deck representation
+* [ ] Animate or visually communicate one spell being drawn
+* [ ] Update hand only once the draw presentation begins
+* [ ] Keep draw animation short
+* [ ] Allow animation skip / fast-forward if useful later
+
+The player must understand:
+
+```text
+"I received this new spell because my turn started."
+```
+
+### Card interaction
+
+Preferred interaction:
+
+```text
+select / drag card
+↓
+show valid targets
+↓
+select target if required
+↓
+commit play
+↓
+Mana paid
+↓
+card enters resolution queue
+```
+
+* [ ] Card interaction delegates legality to pure combat-domain APIs
+* [ ] Invalid targets are visually rejected
+* [ ] Cancelling target selection spends no Mana
+* [ ] Successfully played card leaves the hand visibly
+* [ ] Card enters discard after resolution according to current rules
+
+Success condition:
+
+> Drawing, inspecting and playing a spell feels like a meaningful game action rather than pressing a text button.
+
+---
+
+## 0.6.20 Spell Targeting Model
+
+The current fixed automatic spell effects are sufficient for engine validation but too limited for the gameplay prototype.
+
+Introduce a small explicit targeting model.
+
+Do not build a Magic-style stack or arbitrary scripting system.
 
 Example direction:
 
 ```ts
-interface UnitTypeDefinition {
-  id: string;
-  name: string;
-  hpPerUnit: number;
-  baseDamage: number;
-  abilities: string[];
-  imageKey: string;
-}
+type SpellTargetType =
+  | 'NONE'
+  | 'ENEMY_HERO'
+  | 'FRIENDLY_HERO'
+  | 'ENEMY_SQUAD'
+  | 'FRIENDLY_SQUAD'
+  | 'ANY_SQUAD';
+```
+
+Exact structure may follow the existing architecture.
+
+### Spell definition
+
+A spell should declare:
+
+```text
+Mana cost
+target rule
+effect
+effect value
+visual asset
+```
+
+* [ ] Add target rule to spell content definitions
+* [ ] Query legal spell targets through pure TypeScript
+* [ ] Store selected spell target as part of the prepared action
+* [ ] Validate target again when committing the spell
+* [ ] Do not allow targeting dead squads
+* [ ] Do not allow illegal friendly/enemy targets
+* [ ] Ensure target selection and Mana spending are atomic
+
+### Initial spell redesign
+
+Give the first spell set distinct tactical purposes.
+
+Recommended direction:
+
+```text
+Firebolt
+→ target enemy squad OR enemy hero
+→ direct damage
+
+Barrier
+→ target friendly squad or friendly hero
+→ temporary protection / shield
+
+Battle Cry
+→ target friendly squad
+→ improve its attack for this resolution
+
+Dusk Strike
+→ enemy equivalent offensive spell
+
+Dark Ward
+→ enemy defensive spell
+```
+
+Exact numbers can remain simple.
+
+Do not require all spells to use the same target type.
+
+### Gameplay requirement
+
+Spells should answer different tactical questions:
+
+```text
+Do I finish a weakened squad?
+Do I pressure the hero?
+Do I protect a valuable squad?
+Do I amplify the lane that matters this turn?
+```
+
+Success condition:
+
+> A spell creates a deliberate tactical choice of effect and, where appropriate, target.
+
+---
+
+## 0.6.21 Attack Preview and Commitment
+
+Before Confirm Attack, the player should understand what their prepared attack is expected to do.
+
+Do not reveal hidden randomness because combat is deterministic.
+
+### Target preview
+
+For each surviving player squad during ACTION:
+
+* [ ] Show its currently selected ability
+* [ ] Show its predicted target
+* [ ] Visually connect attacker and target
+* [ ] Clearly indicate attacks that will hit the enemy hero
+* [ ] Update previews immediately after ability selection
+* [ ] Update previews after spell preparation when that spell changes attack outcome
+
+Preferred presentation:
+
+```text
+squad
+→ subtle arrow / lane highlight
+→ target
+```
+
+### Damage preview
+
+Recommended MVP:
+
+* [ ] Display expected outgoing damage when deterministic
+* [ ] Display expected lethal result where useful
+* [ ] Avoid overwhelming the board with numbers
+* [ ] Clearly distinguish preview from already-applied damage
+
+Examples:
+
+```text
+Archer ×3
+Power Shot
+→ Duskborn Brute
+15 damage
+```
+
+or:
+
+```text
+Guardian ×5
+→ HERO
+20 damage
+```
+
+### Confirm Attack
+
+Confirm Attack should mean:
+
+```text
+"I commit these actions."
+```
+
+After pressing it:
+
+```text
+player input locks
+↓
+spell / ability / attack sequence begins automatically
+```
+
+No additional resolution confirmation.
+
+Success condition:
+
+> The player understands the likely consequence of committing the turn.
+
+---
+
+## 0.6.22 Combat Resolution Event Stream
+
+Separate logical resolution from presentation timing.
+
+Pure TypeScript remains authoritative.
+
+Instead of Phaser trying to infer what happened by diffing states, expose a deterministic list of resolved combat events.
+
+Example direction:
+
+```ts
+type CombatEvent =
+  | SpellCastEvent
+  | AbilityUsedEvent
+  | SquadAttackEvent
+  | DamageEvent
+  | UnitDeathEvent
+  | HeroDamageEvent
+  | ShieldEvent
+  | CombatResultEvent;
+```
+
+Exact architecture may differ.
+
+Example sequence:
+
+```text
+SPELL_CAST Firebolt
+DAMAGE Duskborn Archer 5
+SQUAD_ATTACK Guardian -> Brute
+DAMAGE Brute 16
+UNIT_DEATH Brute ×2
+SQUAD_ATTACK Archer -> Hero
+HERO_DAMAGE 12
+```
+
+* [ ] Produce deterministic ordered resolution events
+* [ ] Preserve final CombatState as source of truth
+* [ ] Events contain enough information for presentation
+* [ ] Phaser consumes events sequentially
+* [ ] Presentation speed does not affect domain result
+* [ ] Tests can assert both state and event ordering
+* [ ] No Phaser types in combat-domain events
+
+This layer is important because it allows gameplay animations without contaminating combat logic.
+
+Success condition:
+
+> A complete attack can be presented step-by-step while remaining fully deterministic and testable.
+
+---
+
+## 0.6.23 Attack, Damage and Death Presentation
+
+Add a short readable presentation sequence for combat events.
+
+Do not pursue expensive production animation yet.
+
+Use simple Phaser tweens, flashes, particles and replaceable assets.
+
+### Squad attack
+
+Depending on unit identity:
+
+```text
+melee
+→ short lunge / impact
+
+ranged
+→ projectile
+
+spell
+→ spell-specific projectile / VFX
+```
+
+* [ ] Attacker visibly activates
+* [ ] Target visibly reacts
+* [ ] Keep attacker in its logical grid position after presentation
+
+### Damage
+
+* [ ] Brief hit flash
+* [ ] Floating damage number
+* [ ] Update squad count / partial HP after impact
+* [ ] Update hero HP after hero impact
+* [ ] Show absorbed shield damage distinctly where practical
+
+### Casualties
+
+When damage kills units within a squad:
+
+* [ ] Visually communicate unit loss
+* [ ] Update displayed squad count after impact
+* [ ] Provide stronger feedback when the whole squad dies
+
+### Squad death
+
+* [ ] Play a short death/fade/break animation
+* [ ] Remove squad visual only after death feedback
+* [ ] Ensure lane visibly becomes open afterwards
+
+### Hero damage
+
+* [ ] Stronger screen/hero feedback than ordinary squad damage
+* [ ] Clearly show HP changing
+* [ ] Keep effects brief enough for repeated combats
+
+### Timing
+
+Target initial pacing:
+
+```text
+ordinary hit:
+~0.25–0.45 s
+
+death:
+~0.4–0.7 s
+
+spell:
+~0.4–0.8 s
+```
+
+Exact timings should be tuned through playtesting.
+
+* [ ] No unnecessary multi-second pauses
+* [ ] Allow sequence acceleration later if combat becomes slow
+
+Success condition:
+
+> The player can visually follow exactly what attacked, what was hit, how much damage occurred, and what died.
+
+---
+
+## 0.6.24 Spell Visual Effects
+
+Every initial spell should have recognizable visual feedback.
+
+Placeholder effects are sufficient.
+
+Do not require final artwork.
+
+Examples:
+
+```text
+Firebolt
+→ projectile + fire impact
+
+Barrier
+→ shield pulse / temporary aura
+
+Battle Cry
+→ squad glow / burst
+
+Dusk Strike
+→ dark projectile / impact
+
+Dark Ward
+→ dark shield
+```
+
+* [ ] Define spell visual-effect key/reference in content
+* [ ] Keep effect lookup data-driven
+* [ ] Create placeholder VFX for every initial spell
+* [ ] Show effect travelling to target when appropriate
+* [ ] Play impact before applying visible HP/count update
+* [ ] Do not encode combat effect rules inside VFX code
+* [ ] Missing VFX safely falls back to generic feedback
+
+Success condition:
+
+> The player can identify what kind of spell just occurred without reading the combat log.
+
+---
+
+## 0.6.25 Enemy Turn Readability and Pacing
+
+The enemy acts automatically, but its decisions must remain readable.
+
+Do not reintroduce pre-turn hidden intentions.
+
+During its active turn:
+
+```text
+deployment adjustment
+↓
+ability / spell choices
+↓
+attack resolution
+```
+
+* [ ] Visually show meaningful Duskborn repositioning
+* [ ] Do not animate squads that stay in place
+* [ ] Briefly show spell/ability chosen when relevant
+* [ ] Present enemy spell cast before its effect
+* [ ] Present attacks sequentially using the same event system
+* [ ] Keep enemy turn fast
+* [ ] Automatically return control after the sequence
+* [ ] Clearly indicate when player control returns
+
+Recommended:
+
+```text
+small banner:
+DUSKBORN TURN
+
+...
+
+YOUR TURN
+```
+
+Avoid modal confirmations.
+
+Success condition:
+
+> The player can understand what the enemy did without having to control or confirm the enemy turn.
+
+---
+
+## 0.6.26 Replaceable Combat Visual Assets
+
+Reuse the existing asset direction.
+
+### Units
+
+* [ ] Add visual asset reference to unit-type content definitions
+* [ ] Create placeholder PNG for Guardian
+* [ ] Create placeholder PNG for Archer
+* [ ] Create placeholder PNG for Duskborn Brute
+* [ ] Create placeholder PNG for Duskborn Archer
+* [ ] Define consistent unit-image dimensions/aspect ratio
+* [ ] Load through common Phaser preload flow
+* [ ] Provide missing-asset fallback
+* [ ] Render images on grid squad representations
+
+### Spells
+
+* [ ] Add image reference to spell definitions
+* [ ] Create placeholder PNG assets for all initial spells
+* [ ] Define consistent spell-card aspect ratio
+* [ ] Render cards in hand
+* [ ] Provide missing-asset fallback
+
+### Dynamic information remains UI
+
+Never bake into PNG:
+
+```text
+HP
+count
+level
+Mana cost
+selected ability
+buff/debuff
+```
+
+* [ ] Replacing artwork requires no TypeScript logic change
+
+Success condition:
+
+> Prototype visuals can progressively be upgraded without refactoring gameplay code.
+
+---
+
+## 0.6.27 Tactical Content Vertical Slice
+
+Before judging the combat, ensure there are enough meaningful options to actually test its potential.
+
+The goal is NOT content volume.
+
+The goal is to ensure each system creates decisions.
+
+### Unit identities
+
+Guardian should meaningfully reward:
+
+```text
+frontline
+protection
+survival
+```
+
+Archer should meaningfully reward:
+
+```text
+backline
+damage
+positioning
+```
+
+Duskborn Brute:
+
+```text
+pressure
+high direct threat
+```
+
+Duskborn Archer:
+
+```text
+ranged pressure
+different positional behavior
+```
+
+* [ ] Review baseline ability of each type
+* [ ] Review progression ability choices
+* [ ] Ensure at least two tactically distinct choices exist for progressed player unit types
+* [ ] Avoid abilities that differ only by a small damage number
+
+### Spell package
+
+Target approximately 5–8 prototype player spells before final combat review.
+
+Ensure the package includes at least:
+
+* [ ] direct damage
+* [ ] protection
+* [ ] attack amplification
+* [ ] positional / lane interaction
+* [ ] one spell that creates an interesting target choice
+
+Do not add cards just for quantity.
+
+### Synergy
+
+Include at least a few interactions such as:
+
+```text
+position
++
+ability
++
+spell
 ```
 
 Example:
 
-```ts
-interface SpellDefinition {
-  id: string;
-  name: string;
-  manaCost: number;
-  imageKey: string;
-}
-```
-
-Exact structure may follow existing content architecture.
-
-The important direction is:
-
 ```text
-game logic
-    ↓
-content definition
-    ↓
-imageKey / asset reference
-    ↓
-PNG loaded by Phaser
+Archer BACK bonus
++
+Power Shot
++
+Battle Cry
 ```
 
-Do not hard-code unit-specific or spell-specific image paths throughout scenes.
-
-* [ ] Add visual asset reference to unit-type content definitions
-* [ ] Add visual asset reference to spell content definitions
-* [ ] Create placeholder PNG asset for Guardian
-* [ ] Create placeholder PNG asset for Archer
-* [ ] Create placeholder PNG asset for Duskborn Brute
-* [ ] Create placeholder PNG asset for Duskborn Archer
-* [ ] Create placeholder PNG assets for initial spells
-* [ ] Define consistent unit-image dimensions/aspect ratio
-* [ ] Define consistent spell-card image dimensions/aspect ratio
-* [ ] Load content images through Phaser preload flow
-* [ ] Provide a safe placeholder/fallback image when an asset is missing
-* [ ] Render unit images on combat squad representations
-* [ ] Render spell images in the combat hand
-* [ ] Keep names, counts, HP and Mana costs readable alongside imagery
-* [ ] Verify replacing a PNG does not require TypeScript changes
-
-Prefer an asset organization such as:
-
-```text
-public/
-  assets/
-    units/
-      guardian.png
-      archer.png
-      duskborn-brute.png
-      duskborn-archer.png
-
-    spells/
-      firebolt.png
-      barrier.png
-      battle-cry.png
-```
-
-Do not bake dynamic information into PNG files.
-
-Keep these as UI:
-
-* HP;
-* unit count;
-* level;
-* Mana cost;
-* temporary buffs/debuffs.
+The player should be able to deliberately build a stronger turn through combined decisions.
 
 Success condition:
 
-> The player can understand the complete combat state visually, and unit/spell artwork can be replaced without modifying game logic.
+> A player can experience several meaningfully different tactical turns within a single short combat.
 
 ---
 
-## 0.6.19 Combat MVP Integration Tests
+## 0.6.28 Combat Game-Feel Playtest Pass
 
-Existing grid, deployment, position-category, and lane-targeting test suites remain valid.
+Run repeated manual prototype combats before moving deeper into the rest of the game.
 
-Add pure TypeScript integration coverage for the new combat loop.
+Test for:
 
-At minimum:
+### Clarity
 
-* [ ] player turn start
-* [ ] enemy turn start
-* [ ] active-side switching
-* [ ] Mana refresh
-* [ ] spell draw
-* [ ] per-turn repositioning
-* [ ] lane engagement deployment restriction
-* [ ] phase restrictions
-* [ ] ability Mana spending
-* [ ] spell Mana spending
-* [ ] insufficient Mana rejection
-* [ ] Confirm Attack
-* [ ] FRONT targeting during attack
-* [ ] BACK targeting when FRONT is absent
-* [ ] empty-lane hero damage
-* [ ] squad casualties
-* [ ] partial unit HP
-* [ ] dead squad lane removal
-* [ ] player attack resolution
-* [ ] enemy attack resolution
-* [ ] victory from enemy hero HP reaching 0
-* [ ] defeat from player hero HP reaching 0
-* [ ] combat stops after result
-* [ ] surviving squad persistence
-* [ ] unit-type XP
-* [ ] unit-type level-up
-* [ ] ability unlock
+* [ ] Player always knows whose turn it is
+* [ ] Player always knows what actions are currently available
+* [ ] Targeting rules are understood without documentation
+* [ ] Damage and deaths are visually understandable
+
+### Agency
+
+* [ ] Deployment decisions matter
+* [ ] Ability choices matter
+* [ ] Spell targets matter
+* [ ] Mana creates meaningful trade-offs
+* [ ] Player sometimes changes plan after drawing a card
+
+### Feedback
+
+* [ ] Draw feels rewarding
+* [ ] Spell cast feels responsive
+* [ ] Attack impact feels satisfying
+* [ ] Squad death feels important
+* [ ] Hero damage feels dangerous
+* [ ] Victory feels conclusive
+
+### Pacing
+
+Measure approximately:
+
+```text
+time to make deployment decision
+time to make ACTION decision
+resolution animation duration
+enemy turn duration
+total combat duration
+```
+
+Recommended MVP targets, to tune rather than treat as hard requirements:
+
+```text
+normal player resolution:
+~2–5 seconds
+
+enemy turn presentation:
+~3–7 seconds
+
+ordinary combat:
+roughly 3–8 minutes
+```
+
+* [ ] No unnecessary confirmation click
+* [ ] No animation routinely blocks decision-making for too long
+* [ ] Repeated animations remain tolerable after several combats
+
+### Strategic interest
+
+After multiple combats ask:
+
+* [ ] Did lane placement create real dilemmas?
+* [ ] Did I intentionally leave or attack an open lane?
+* [ ] Did I choose between an ability and a spell because of Mana?
+* [ ] Did card draw alter my intended turn?
+* [ ] Did positioning change ability value?
+* [ ] Did unit losses change later decisions?
+* [ ] Did progression create a strategy I wanted to continue?
 
 Success condition:
 
-> A complete player turn and enemy turn can be simulated and tested without Phaser.
+> A tester can play several combats for enjoyment rather than merely verifying that the systems function.
 
 ---
 
-## 0.6.20 Combat MVP Review
+## 0.6.29 Combat MVP Integration Tests
 
-Do not add more combat complexity before reviewing the prototype.
+Retain and extend the existing integration-test checklist.
 
-Review:
+In addition to current logical coverage, add:
 
-* [ ] Is per-turn placement tactically meaningful?
-* [ ] Is the lane engagement restriction easy to understand?
-* [ ] Does repositioning create meaningful attack/defense decisions?
-* [ ] Are FRONT/BACK/EDGE/CENTER easy to understand?
-* [ ] Does lane targeting remain predictable?
-* [ ] Is leaving a lane open to hero damage strategically interesting?
-* [ ] Does Mana create meaningful choices between spells and unit abilities?
-* [ ] Does drawing one spell per turn create useful variety?
-* [ ] Are spells understandable without introducing excessive card-game complexity?
-* [ ] Do different unit types feel distinct?
-* [ ] Is alternating player/enemy resolution easy to follow?
-* [ ] Does first-player advantage need compensation?
-* [ ] Are unit losses impactful without being frustrating?
-* [ ] Is unit-type leveling satisfying?
-* [ ] Are ability choices more interesting than flat stat upgrades?
-* [ ] Does combat remain short enough to preserve the "One More Day" rhythm?
+* [ ] targeted spell validation
+* [ ] invalid spell-target rejection
+* [ ] prepared spell target persistence
+* [ ] Confirm Attack starts resolution without extra domain confirmation
+* [ ] deterministic CombatEvent ordering
+* [ ] spell event before squad attack event
+* [ ] damage event before death event
+* [ ] lethal event stops later combat events when combat ends
+* [ ] progression-unlocked abilities remain usable
+* [ ] full player → enemy → player cycle after presentation-independent domain simulation
+
+Animations themselves do not require fragile frame-by-frame tests.
+
+Test domain events and state; manually verify presentation.
 
 Success condition:
 
-> Combat combines tactical lane placement, Mana allocation, squad abilities, and lightweight spell-card decisions while remaining fast enough for repeated daily battles.
+> The full gameplay loop remains deterministic even though its presentation is animated.
+
+---
+
+## 0.6.30 Combat MVP Review and Investment Gate
+
+Do not treat this as only a rules review.
+
+This is the decision point for whether the combat is compelling enough to justify expanding the rest of the game.
+
+Review the existing questions plus:
+
+### Core fun
+
+* [ ] Would I voluntarily play another battle?
+* [ ] Is there a satisfying decision at least once per turn?
+* [ ] Does a strong turn feel earned?
+* [ ] Is there enough uncertainty from hand/draw without losing tactical control?
+* [ ] Can the player understand why they won or lost?
+
+### Identity
+
+* [ ] Does lane coverage distinguish Duskborn from a generic card battler?
+* [ ] Do persistent squads create emotional/strategic value?
+* [ ] Does combining placement + abilities + spells feel distinctive?
+* [ ] Is the game borrowing strengths from its inspirations without becoming a weaker clone?
+
+### Investment gate
+
+Before expanding content significantly, explicitly decide:
+
+```text
+CONTINUE
+→ core combat is already enjoyable
+→ invest in exploration, roster, content and production
+
+ITERATE
+→ core idea works but specific systems need adjustment
+
+RETHINK
+→ combat is technically functional but not compelling
+```
+
+Success condition:
+
+> The combat prototype is polished enough that its fun—not missing UI or feedback—determines whether development continues.
 
 ---
 
