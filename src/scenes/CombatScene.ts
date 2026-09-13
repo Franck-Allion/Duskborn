@@ -40,6 +40,8 @@ export class CombatScene extends Phaser.Scene {
   private deploymentHint!: Phaser.GameObjects.Text;
   private sidebarTitle!: Phaser.GameObjects.Text;
   private actionPanel!: CombatActionPanel;
+  private playerHpText!: Phaser.GameObjects.Text;
+  private enemyHpText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('combat');
@@ -129,12 +131,30 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.enemyHpText = this.add
+      .text(centerX - 80, 75, 'HP: 100', {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#fca5a5', // red-300
+      })
+      .setOrigin(0.5);
+
     this.add
       .text(centerX - 80, 490, 'PLAYER SIDE', {
         fontFamily: 'monospace',
         fontSize: '18px',
         fontStyle: 'bold',
         color: '#60a5fa', // blue-400
+      })
+      .setOrigin(0.5);
+
+    this.playerHpText = this.add
+      .text(centerX - 80, 515, 'HP: 100', {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#93c5fd', // blue-300
       })
       .setOrigin(0.5);
 
@@ -344,6 +364,16 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private refreshDeploymentUI(): void {
+    if (this.playerHpText && this.enemyHpText) {
+      const playerShield = this.combatState.playerHeroShield ?? 0;
+      const playerShieldStr = playerShield > 0 ? `  Shield: ${playerShield}` : '';
+      this.playerHpText.setText(`HP: ${this.combatState.playerHeroHp}${playerShieldStr}`);
+
+      const enemyShield = this.combatState.enemyHeroShield ?? 0;
+      const enemyShieldStr = enemyShield > 0 ? `  Shield: ${enemyShield}` : '';
+      this.enemyHpText.setText(`HP: ${this.combatState.enemyHeroHp}${enemyShieldStr}`);
+    }
+
     this.actionPanel.clear();
     this.confirmButtonVisuals.forEach((visual) => visual.destroy());
     this.confirmButtonVisuals = [];

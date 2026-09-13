@@ -75,22 +75,22 @@ describe('EnemyTurnAI logical turn execution loop', () => {
     endTurn(state); // Go to enemy turn in DEPLOYMENT
 
     // Run Enemy AI turn
-    // Player has a Guardian in column 2, meaning lane engagement restricts enemy to column 2!
+    // Player has a Guardian in column 2. Under the new coverage rules:
+    // 1. Brute must cover column 2 (since no other enemy squad does).
+    // 2. Once column 2 is covered, Archer is free to deploy anywhere (and chooses col 0 FRONT).
     const success = runEnemyTurn(state);
     expect(success).toBe(true);
 
-    // Surviving enemy squads must be positioned in column 2 FRONT and col 2 BACK
     const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
     const archer = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-archer')!;
 
     expect(brute.position).not.toBeNull();
     expect(brute.position!.column).toBe(2);
-    // Prefer FRONT (row 1) over BACK (row 0)
     expect(brute.position!.row).toBe(1); // Brute (index 0) gets column 2 FRONT
 
     expect(archer.position).not.toBeNull();
-    expect(archer.position!.column).toBe(2);
-    expect(archer.position!.row).toBe(0); // Archer (index 1) gets column 2 BACK
+    expect(archer.position!.column).toBe(0);
+    expect(archer.position!.row).toBe(1); // Archer gets column 0 FRONT (free column choice)
   });
 
   it('deploys to any legal column when no opponent squads are positioned', () => {

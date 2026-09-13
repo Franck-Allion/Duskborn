@@ -335,6 +335,45 @@ export function getEngagedColumns(
 }
 
 /**
+ * Retrieves the columns occupied by surviving opposing squads that are not currently covered
+ * by any of the other (excluding the moving squad) surviving, positioned friendly squads.
+ * If this list is not empty, any reposition/deployment of the moving squad must cover
+ * one of these uncovered columns to be legal.
+ */
+export function getRequiredCoverageColumns(
+  state: CombatState,
+  side: CombatSide,
+  movingUnitTypeId: string,
+): number[] {
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
+
+  // 1. Identify all opponent-occupied columns
+  const opposingOccupiedColumns = new Set(
+    opponents
+      .filter((s) => s.count > 0 && s.position !== null)
+      .map((s) => s.position!.column)
+  );
+
+  // 2. Identify columns covered by other friendly squads (excluding the moving unit itself)
+  const otherColumnsOfMovingSide = new Set(
+    squads
+      .filter((s) => s.count > 0 && s.position !== null && s.unitTypeId !== movingUnitTypeId)
+      .map((s) => s.position!.column)
+  );
+
+  // 3. Find which opponent-occupied columns are left uncovered by others
+  const uncoveredByOthers: number[] = [];
+  for (const col of opposingOccupiedColumns) {
+    if (!otherColumnsOfMovingSide.has(col)) {
+      uncoveredByOthers.push(col);
+    }
+  }
+
+  return uncoveredByOthers;
+}
+
+/**
  * Checks a potential reposition without mutating state, for previews and commits.
  * Rules:
  * - Only legal when state.phase is 'DEPLOYMENT'.
@@ -395,10 +434,10 @@ export function canRepositionSquad(
     return false;
   }
 
-  // 5.5 Lane engagement validation
-  const engagedColumns = getEngagedColumns(state, side);
-  if (engagedColumns.length > 0) {
-    if (!engagedColumns.includes(targetPosition.column)) {
+  // 5.5 Lane engagement validation using the symmetric coverage rule
+  const requiredCols = getRequiredCoverageColumns(state, side, unitTypeId);
+  if (requiredCols.length > 0) {
+    if (!requiredCols.includes(targetPosition.column)) {
       return false;
     }
   }
