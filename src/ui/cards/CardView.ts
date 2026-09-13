@@ -23,6 +23,25 @@ export interface CardViewConfig {
 }
 
 /**
+ * Interface binding a target Image to its hardware-accelerated Phaser 4 filter controllers.
+ */
+export interface CardImageFilters {
+  target: Phaser.GameObjects.Image;
+  glow: {
+    setActive: (value: boolean) => void;
+    color?: number;
+    outerStrength?: number;
+    innerStrength?: number;
+  };
+  colorMatrix: {
+    setActive: (value: boolean) => void;
+    reset: () => void;
+    desaturate: () => void;
+    brightness: (value: number) => void;
+  };
+}
+
+/**
  * Reusable premium Phaser 4 component representing a cohesive Combat Card.
  */
 export class CardView extends Phaser.GameObjects.Container {
@@ -46,8 +65,8 @@ export class CardView extends Phaser.GameObjects.Container {
   protected artBaseX: number = 0;
   protected artBaseY: number = 0;
 
-  protected glowFilter: unknown = null;
-  protected colorMatrixFilter: unknown = null;
+  // Stored filter controllers created once per filtered Image to prevent leaks/progressive stacking
+  protected imageFilters: CardImageFilters[] = [];
 
   constructor(
     scene: Phaser.Scene,
@@ -277,26 +296,60 @@ export class CardView extends Phaser.GameObjects.Container {
   }
 
   private applyPhaser4Filters(): void {
+    this.imageFilters = [];
     try {
-      const targets = [this.frame, this.art].filter((t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image);
+      const targets = [this.frame, this.art].filter(
+        (t): t is Phaser.GameObjects.Image => t instanceof Phaser.GameObjects.Image
+      );
+
       for (const img of targets) {
-        const imgWithFilters = img as unknown as {
-          enableFilters?: () => void;
-          filters?: { glow?: unknown; colorMatrix?: unknown };
+        // 1. Enable filters system on image
+        if (typeof img.enableFilters === 'function') {
+          img.enableFilters();
+        }
+
+        // 2. Add Glow filter.
+        // We choose img.filters.external for Glow because an outer glow
+        // needs to extend beyond the image's bounding box/silhouette cleanly
+        // without being clipped by the internal texture container.
+        let glow: unknown = null;
+        const imgFilters = img.filters as unknown as {
+          external?: { addGlow?: () => unknown };
+          internal?: { addGlow?: () => unknown; addColorMatrix?: () => unknown };
         };
-        if (typeof imgWithFilters.enableFilters === 'function') {
-          imgWithFilters.enableFilters();
-          
-          if (!this.glowFilter && imgWithFilters.filters?.glow) {
-            this.glowFilter = imgWithFilters.filters.glow;
-          }
-          if (!this.colorMatrixFilter && imgWithFilters.filters?.colorMatrix) {
-            this.colorMatrixFilter = imgWithFilters.filters.colorMatrix;
-          }
+        if (imgFilters?.external && typeof imgFilters.external.addGlow === 'function') {
+          glow = imgFilters.external.addGlow();
+        } else if (imgFilters?.internal && typeof imgFilters.internal.addGlow === 'function') {
+          glow = imgFilters.internal.addGlow();
+        }
+
+        if (glow) {
+          (glow as { setActive: (v: boolean) => void }).setActive(false);
+        }
+
+        // 3. Add ColorMatrix filter.
+        // We choose img.filters.internal for ColorMatrix because desaturation
+        // and brightness corrections are per-pixel calculations that are best done
+        // internally before any external rendering overlays are applied.
+        let colorMatrix: unknown = null;
+        if (imgFilters?.internal && typeof imgFilters.internal.addColorMatrix === 'function') {
+          colorMatrix = imgFilters.internal.addColorMatrix();
+        }
+
+        if (colorMatrix) {
+          (colorMatrix as { setActive: (v: boolean) => void }).setActive(false);
+        }
+
+        if (img && glow && colorMatrix) {
+          this.imageFilters.push({
+            target: img,
+            glow: glow as CardImageFilters['glow'],
+            colorMatrix: colorMatrix as CardImageFilters['colorMatrix'],
+          });
         }
       }
     } catch {
-      // Safe fallback
+      // Safe fallback if filters are unsupported by the renderer or Phaser version
     }
   }
 
@@ -414,43 +467,47 @@ export class CardView extends Phaser.GameObjects.Container {
       this.shadow.setAlpha(0.4);
     }
 
-    // 2. Playable & Hover effects via Phaser 4 native filter triggers (if supported/practical)
+    // 2. Dynamic Update/Reuse of stored native Phaser 4 filters
     try {
-      if (this.glowFilter) {
-        const glow = this.glowFilter as { enable: () => void; disable: () => void; radius: number; color: number };
-        if (state === 'HOVER') {
-          glow.enable();
-          glow.radius = 16;
-          glow.color = 0xfca5a5; // lighter
-        } else if (state === 'PLAYABLE') {
-          glow.enable();
-          glow.radius = 10;
-          glow.color = 0x60a5fa; // blue
-        } else if (state === 'SELECTED') {
-          glow.enable();
-          glow.radius = 12;
-          glow.color = 0xfbbf24; // golden
-        } else {
-          glow.disable();
-        }
-      }
+      for (const binding of this.imageFilters) {
+        // Reset both filters to inactive/clean state by default
+        binding.glow.setActive(false);
+        binding.colorMatrix.setActive(false);
 
-      if (this.colorMatrixFilter) {
-        const matrix = this.colorMatrixFilter as { enable: () => void; disable: () => void; desaturate: () => void; brightness: (v: number) => void };
-        if (state === 'DISABLED') {
-          matrix.enable();
-          matrix.desaturate();
-          matrix.brightness(0.65);
+        if (state === 'PLAYABLE') {
+          // Playable state: moderate blue/cyan glow halo
+          binding.glow.setActive(true);
+          binding.glow.color = 0x60a5fa;
+          binding.glow.outerStrength = 10;
+          binding.glow.innerStrength = 0;
+        } else if (state === 'HOVER') {
+          // Hover state: slightly stronger outer glow of same color family
+          binding.glow.setActive(true);
+          binding.glow.color = 0xfca5a5; // lighter arcane pinkish glow
+          binding.glow.outerStrength = 16;
+          binding.glow.innerStrength = 0;
+        } else if (state === 'SELECTED') {
+          // Selected state: gold/amber glow with medium emphasis
+          binding.glow.setActive(true);
+          binding.glow.color = 0xfbbf24;
+          binding.glow.outerStrength = 12;
+          binding.glow.innerStrength = 0;
+        } else if (state === 'DISABLED') {
+          // Disabled state: desaturated and slightly dimmed, reset first to prevent accumulation
+          binding.colorMatrix.setActive(true);
+          binding.colorMatrix.reset();
+          binding.colorMatrix.desaturate();
+          binding.colorMatrix.brightness(0.65);
         } else if (state === 'DEPLOYED') {
-          matrix.enable();
-          matrix.desaturate();
-          matrix.brightness(0.85); // milder desat for deployed
-        } else {
-          matrix.disable();
+          // Deployed state: milder desaturation and brightness correction, reset first to prevent accumulation
+          binding.colorMatrix.setActive(true);
+          binding.colorMatrix.reset();
+          binding.colorMatrix.desaturate();
+          binding.colorMatrix.brightness(0.85);
         }
       }
     } catch {
-      // Safe fallback
+      // Safe fallback if runtime properties differ or procedurals are active
     }
 
     // 3. Fallback alpha overlay adjustments
@@ -484,6 +541,10 @@ export class CardView extends Phaser.GameObjects.Container {
     if (clickTween) {
       clickTween.destroy();
     }
+
+    // Clean up filter references
+    this.imageFilters = [];
+
     super.destroy(fromScene);
   }
 }
