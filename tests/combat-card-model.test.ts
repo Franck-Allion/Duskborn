@@ -6,6 +6,7 @@ import {
   initializeOpeningCombatCards,
   discardSpellCard,
   hasDuplicateCardInstances,
+  drawCombatCard,
   type CombatCard,
   type CreatureCard,
   type SpellCard,
@@ -15,9 +16,11 @@ import { UNIT_REGISTRY } from '../src/game/content/unitTypes';
 import { SPELL_REGISTRY } from '../src/game/content/spells';
 import {
   executeOpeningDraw,
-  syncUnifiedSpellsFromLegacy,
+  syncLegacySpellDeckFromUnified,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
+  beginTurn,
+  playSpell,
   type CombatState,
 } from '../src/game/combat/CombatState';
 
@@ -397,11 +400,11 @@ describe('Unified Combat Card Model', () => {
       expect(spellCardsInPool.some((c) => c.contentId === 'battle-cry')).toBe(true);
     });
 
-    it('synchronizes unified spells from the legacy deck', () => {
+    it('synchronizes the legacy deck from the authoritative unified deck', () => {
       const legacyDeck = {
-        drawPile: ['firebolt'],
-        hand: ['barrier'],
-        discardPile: ['battle-cry'],
+        drawPile: [],
+        hand: [],
+        discardPile: [],
       };
 
       const unified = {
@@ -420,26 +423,268 @@ describe('Unified Combat Card Model', () => {
         ] as CombatCard[],
       };
 
-      syncUnifiedSpellsFromLegacy(unified, legacyDeck);
+      syncLegacySpellDeckFromUnified(unified, legacyDeck);
 
-      // Verify spell Hand matches legacy hand
+      // Verify legacy fields match unified spell zones
+      expect(legacyDeck.hand).toEqual(['barrier']);
+      expect(legacyDeck.drawPile).toEqual(['firebolt']); // creature filter works
+      expect(legacyDeck.discardPile).toEqual(['battle-cry']);
+    });
+
+    it('verifies first player turn regression: no extra draw occurs after opening draw', () => {
+      const combat: CombatState = {
+        playerSquads: [
+          { unitTypeId: 'guardian', count: 8, damagedUnitHp: null, position: null },
+          { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: null },
+        ],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+        playerMana: { current: 3, max: 3 },
+        enemyMana: { current: 3, max: 3 },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+      };
+
+      // 1. Initialize starting unified pool
+      combat.playerCombatDeck = createInitialPlayerCombatDeck(combat.playerSquads, ['firebolt', 'barrier', 'battle-cry']);
+      expect(combat.playerCombatDeck.drawPile.length).toBe(5);
+
+      // 2. Perform opening draw (2 creatures + 1 spell)
+      const mockRandom = () => 0; // deterministic
+      executeOpeningDraw(combat, mockRandom);
+
+      expect(combat.playerCombatDeck.creatureBench.length).toBe(2);
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.drawPile.length).toBe(2);
+
+      // 3. Start turn 1: should restore player Mana, transition to DEPLOYMENT, and NOT draw any additional card!
+      const beginSuccess = beginTurn(combat);
+      expect(beginSuccess).toBe(true);
+      expect(combat.phase).toBe('DEPLOYMENT');
+
+      // Assert NO extra draw occurred
+      expect(combat.playerCombatDeck.creatureBench.length).toBe(2);
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.drawPile.length).toBe(2);
+    });
+
+    it('verifies per-turn mixed card draw and capacity limits/burns', () => {
+      const unified = {
+        drawPile: [
+          { instanceId: 'spell:firebolt:0', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'creature:guardian:0', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+        ] as CombatCard[],
+        spellHand: [] as SpellCard[],
+        creatureBench: [] as CreatureCard[],
+        discardPile: [] as CombatCard[],
+      };
+
+      // 1. Draw known top card (Spell)
+      const res1 = drawCombatCard(unified);
+      expect(res1.outcome).toBe('DRAWN_TO_HAND');
+      expect(res1.card.spellId).toBe('firebolt');
       expect(unified.spellHand.length).toBe(1);
-      expect(unified.spellHand[0].spellId).toBe('barrier');
-      expect(unified.spellHand[0].instanceId).toBe('spell:barrier:0');
+      expect(unified.drawPile.length).toBe(1);
 
-      // Verify draw pile has correct spell and STILL has the Creature card
-      expect(unified.drawPile.length).toBe(2);
-      expect(unified.drawPile.some((c) => c.instanceId === 'creature:guardian:0')).toBe(true);
-      expect(unified.drawPile.some((c) => c.instanceId === 'spell:firebolt:0')).toBe(true);
-
-      // Verify creatureBench was untouched
+      // 2. Draw known top card (Creature)
+      const res2 = drawCombatCard(unified);
+      expect(res2.outcome).toBe('DRAWN_TO_BENCH');
+      expect(res2.card.unitTypeId).toBe('guardian');
       expect(unified.creatureBench.length).toBe(1);
-      expect(unified.creatureBench[0].instanceId).toBe('creature:archer:0');
+      expect(unified.drawPile.length).toBe(0);
 
-      // Verify discard pile has correct spell
-      expect(unified.discardPile.length).toBe(1);
-      expect(unified.discardPile[0].contentId).toBe('battle-cry');
-      expect(unified.discardPile[0].instanceId).toBe('spell:battle-cry:0');
+      // 3. Draw from empty deck
+      const res3 = drawCombatCard(unified);
+      expect(res3.outcome).toBe('EMPTY_DECK');
+
+      // 4. Spell hand full limit (at 5 spells)
+      const fullSpellHand = {
+        drawPile: [
+          { instanceId: 'spell:battle-cry:0', cardType: 'SPELL', contentId: 'battle-cry', spellId: 'battle-cry' },
+        ] as CombatCard[],
+        spellHand: [
+          { instanceId: 'spell:s1', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'spell:s2', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'spell:s3', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'spell:s4', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'spell:s5', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+        ] as SpellCard[],
+        creatureBench: [] as CreatureCard[],
+        discardPile: [] as CombatCard[],
+      };
+
+      const res4 = drawCombatCard(fullSpellHand);
+      expect(res4.outcome).toBe('BURNED');
+      expect(res4.card.contentId).toBe('battle-cry');
+      if (res4.outcome === 'BURNED') {
+        expect(res4.reason).toBe('SPELL_HAND_FULL');
+      }
+      expect(fullSpellHand.spellHand.length).toBe(5);
+      expect(fullSpellHand.discardPile.length).toBe(1);
+      expect(fullSpellHand.discardPile[0].instanceId).toBe('spell:battle-cry:0');
+
+      // 5. Creature bench full limit (at 5 creatures)
+      const fullCreatureBench = {
+        drawPile: [
+          { instanceId: 'creature:archer:0', cardType: 'CREATURE', contentId: 'archer', unitTypeId: 'archer' },
+        ] as CombatCard[],
+        spellHand: [] as SpellCard[],
+        creatureBench: [
+          { instanceId: 'creature:g1', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+          { instanceId: 'creature:g2', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+          { instanceId: 'creature:g3', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+          { instanceId: 'creature:g4', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+          { instanceId: 'creature:g5', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' },
+        ] as CreatureCard[],
+        discardPile: [] as CombatCard[],
+      };
+
+      const res5 = drawCombatCard(fullCreatureBench);
+      expect(res5.outcome).toBe('BURNED');
+      expect(res5.card.contentId).toBe('archer');
+      if (res5.outcome === 'BURNED') {
+        expect(res5.reason).toBe('CREATURE_BENCH_FULL');
+      }
+      expect(fullCreatureBench.creatureBench.length).toBe(5);
+      expect(fullCreatureBench.discardPile.length).toBe(1);
+      expect(fullCreatureBench.discardPile[0].instanceId).toBe('creature:archer:0');
+    });
+
+    it('verifies that spellHand and creatureBench persist across turn handoffs', () => {
+      const combat: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'TURN_START',
+        playerMana: { current: 3, max: 3 },
+        enemyMana: { current: 3, max: 3 },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+      };
+
+      combat.playerCombatDeck = {
+        drawPile: [],
+        spellHand: [{ instanceId: 'spell:firebolt:0', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' }],
+        creatureBench: [{ instanceId: 'creature:guardian:0', cardType: 'CREATURE', contentId: 'guardian', unitTypeId: 'guardian' }],
+        discardPile: [],
+      };
+
+      // Transition turn and active side
+      combat.activeSide = 'enemy';
+      combat.turn = 2;
+      combat.phase = 'TURN_START';
+      const endSuccess = beginTurn(combat); // manually trigger beginTurn
+      expect(endSuccess).toBe(true);
+
+      // Verify player's spellHand and creatureBench did NOT change or clear
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.creatureBench.length).toBe(1);
+    });
+
+    it('verifies playing one duplicate spell removes only one instance and preserves the other', () => {
+      const combat: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        activeSide: 'player',
+        turn: 1,
+        phase: 'ACTION',
+        playerMana: { current: 3, max: 3 },
+        enemyMana: { current: 3, max: 3 },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+      };
+
+      const card1 = { instanceId: 'spell:firebolt:0', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' } as SpellCard;
+      const card2 = { instanceId: 'spell:firebolt:1', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' } as SpellCard;
+
+      combat.playerCombatDeck = {
+        drawPile: [],
+        spellHand: [card1, card2],
+        creatureBench: [],
+        discardPile: [],
+      };
+
+      // Synchronize initial state to legacy deck for the test context
+      syncLegacySpellDeckFromUnified(combat.playerCombatDeck, combat.playerDeck);
+
+      expect(combat.playerDeck.hand).toEqual(['firebolt', 'firebolt']);
+
+      // Play the spell (costs 2 mana)
+      const playSuccess = playSpell(combat, 'player', 'firebolt');
+      expect(playSuccess).toBe(true);
+
+      // Verify EXACTLY one is in discard, and other is still in hand
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.spellHand[0].instanceId).toBe('spell:firebolt:1');
+      expect(combat.playerCombatDeck.discardPile.length).toBe(1);
+      expect(combat.playerCombatDeck.discardPile[0].instanceId).toBe('spell:firebolt:0');
+
+      // Verify legacy mirror matches authoritative state
+      expect(combat.playerDeck.hand).toEqual(['firebolt']);
+      expect(combat.playerDeck.discardPile).toEqual(['firebolt']);
+    });
+
+    it('verifies that drawing mixed cards is idempotent per turn start', () => {
+      const combat: CombatState = {
+        playerSquads: [],
+        enemySquads: [],
+        playerHeroHp: 100,
+        enemyHeroHp: 100,
+        activeSide: 'player',
+        turn: 2, // Second player turn
+        phase: 'TURN_START',
+        playerMana: { current: 3, max: 3 },
+        enemyMana: { current: 3, max: 3 },
+        playerDeck: createInitialPlayerSpellDeck(),
+        enemyDeck: createInitialEnemySpellDeck(),
+        selectedPlayerAbilities: {},
+        selectedEnemyAbilities: {},
+      };
+
+      combat.playerCombatDeck = {
+        drawPile: [
+          { instanceId: 'spell:firebolt:0', cardType: 'SPELL', contentId: 'firebolt', spellId: 'firebolt' },
+          { instanceId: 'spell:barrier:0', cardType: 'SPELL', contentId: 'barrier', spellId: 'barrier' },
+        ] as CombatCard[],
+        spellHand: [] as SpellCard[],
+        creatureBench: [] as CreatureCard[],
+        discardPile: [] as CombatCard[],
+      };
+
+      // Initialize legacy mirror
+      syncLegacySpellDeckFromUnified(combat.playerCombatDeck, combat.playerDeck);
+
+      // First start of player turn 2
+      const firstBegin = beginTurn(combat);
+      expect(firstBegin).toBe(true);
+
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.spellHand[0].spellId).toBe('firebolt');
+      expect(combat.playerCombatDeck.drawPile.length).toBe(1);
+
+      // Accidental second start of player turn 2 (or manual replay)
+      combat.phase = 'TURN_START'; // force phase
+      const secondBegin = beginTurn(combat);
+      expect(secondBegin).toBe(true);
+
+      // Verify NO additional card was drawn, remaining in stable state!
+      expect(combat.playerCombatDeck.spellHand.length).toBe(1);
+      expect(combat.playerCombatDeck.drawPile.length).toBe(1);
     });
   });
 });

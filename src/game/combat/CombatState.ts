@@ -16,7 +16,7 @@ import {
   type RandomSource,
   initializeOpeningCombatCards,
   type SpellCard,
-  type CreatureCard,
+  drawCombatCard,
 } from './CombatCard';
 import { drawSpell, discardSpell } from './SpellDeck';
 import { SPELL_REGISTRY } from '../content/spells';
@@ -79,6 +79,8 @@ export interface CombatState {
   playerCombatDeck?: CombatCardState;
   enemyCombatDeck?: CombatCardState;
   openingDrawCompleted?: boolean;
+  lastCardDrawTurn?: number;
+  lastCardDrawSide?: CombatSide;
   selectedPlayerAbilities: Record<string, string>;
   selectedEnemyAbilities: Record<string, string>;
   playerPlayedSpells?: string[];
@@ -213,10 +215,21 @@ export function beginTurn(state: CombatState): boolean {
   const legacyDeck = state.activeSide === 'player' ? state.playerDeck : state.enemyDeck;
   const unifiedDeck = state.activeSide === 'player' ? state.playerCombatDeck : state.enemyCombatDeck;
 
-  drawSpell(legacyDeck);
-
   if (unifiedDeck) {
-    syncUnifiedSpellsFromLegacy(unifiedDeck, legacyDeck);
+    // Check if we already drew for this turn and side to prevent double/idempotent drawing
+    const alreadyDrawn = state.lastCardDrawTurn === state.turn && state.lastCardDrawSide === state.activeSide;
+
+    if (!alreadyDrawn) {
+      drawCombatCard(unifiedDeck);
+      state.lastCardDrawTurn = state.turn;
+      state.lastCardDrawSide = state.activeSide;
+    }
+
+    // Mirror to legacy spell hand
+    syncLegacySpellDeckFromUnified(unifiedDeck, legacyDeck);
+  } else {
+    // Legacy fallback draw (used in pure legacy tests)
+    drawSpell(legacyDeck);
   }
 
   state.phase = 'DEPLOYMENT';
@@ -710,10 +723,21 @@ export function playSpell(
     return false;
   }
 
-  // 3. Hand presence check
+  // 3. Hand presence check (check unified deck if exists, fallback/sync to legacy)
+  const unifiedDeck = side === 'player' ? state.playerCombatDeck : state.enemyCombatDeck;
   const deck = side === 'player' ? state.playerDeck : state.enemyDeck;
-  if (!deck.hand.includes(spellId)) {
-    return false;
+
+  let unifiedCardIndex = -1;
+  if (unifiedDeck) {
+    unifiedCardIndex = unifiedDeck.spellHand.findIndex((c) => c.spellId === spellId);
+    if (unifiedCardIndex === -1) {
+      return false;
+    }
+  } else {
+    // Legacy fallback check
+    if (!deck.hand.includes(spellId)) {
+      return false;
+    }
   }
 
   // 4. Mana cost validation
@@ -729,17 +753,21 @@ export function playSpell(
   }
 
   // 6. Discard card atomically
-  const discarded = discardSpell(deck, spellId);
-  if (!discarded) {
-    // Rollback Mana in case discard fails
-    mana.current += spell.manaCost;
-    return false;
-  }
+  if (unifiedDeck && unifiedCardIndex !== -1) {
+    // Move exact instance from unified spellHand to unified discardPile
+    const [card] = unifiedDeck.spellHand.splice(unifiedCardIndex, 1);
+    unifiedDeck.discardPile.push(card);
 
-  // Sync unified deck
-  const unifiedDeck = side === 'player' ? state.playerCombatDeck : state.enemyCombatDeck;
-  if (unifiedDeck) {
-    syncUnifiedSpellsFromLegacy(unifiedDeck, deck);
+    // Mirror to legacy spell hand
+    syncLegacySpellDeckFromUnified(unifiedDeck, deck);
+  } else {
+    // Legacy fallback discard
+    const discarded = discardSpell(deck, spellId);
+    if (!discarded) {
+      // Rollback Mana in case discard fails
+      mana.current += spell.manaCost;
+      return false;
+    }
   }
 
   // 7. Record successfully played spell in the per-turn list
@@ -1290,64 +1318,20 @@ export function resolveActiveSideAttack(state: CombatState): boolean {
 }
 
 /**
- * Synchronizes the unified deck's spell zones to perfectly match the legacy deck's zones,
- * while leaving Creature cards in drawing or bench zones untouched.
- *
- * This is part of the legacy compatibility bridge and ensures full stability across all existing tests.
+ * Synchronizes the legacy spell deck state to match the authoritative unified deck state.
+ * This is part of the legacy compatibility bridge and ensures full stability for visual hands.
  */
-export function syncUnifiedSpellsFromLegacy(
+export function syncLegacySpellDeckFromUnified(
   unified: CombatCardState,
   legacy: SpellDeckState,
 ): void {
-  // 1. Gather all SpellCards currently in the unified deck (from hand, draw, discard)
-  const allSpellCards = [
-    ...unified.spellHand,
-    ...unified.drawPile.filter((c): c is SpellCard => c.cardType === 'SPELL'),
-    ...unified.discardPile.filter((c): c is SpellCard => c.cardType === 'SPELL'),
-  ];
-
-  // 2. We want to distribute these exact SpellCard instances across unified zones to match the legacy zones
-  const newSpellHand: SpellCard[] = [];
-  const newSpellDrawPile: SpellCard[] = [];
-  const newSpellDiscardPile: SpellCard[] = [];
-
-  const remainingHandIds = [...legacy.hand];
-  const remainingDrawIds = [...legacy.drawPile];
-  const remainingDiscardIds = [...legacy.discardPile];
-
-  const matchAndMove = (id: string, destination: SpellCard[]): void => {
-    const cardIndex = allSpellCards.findIndex((c) => c.spellId === id);
-    if (cardIndex !== -1) {
-      destination.push(allSpellCards.splice(cardIndex, 1)[0]);
-    } else {
-      // Dynamic fallback to keep tests robust
-      destination.push({
-        instanceId: `spell:${id}:sync_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        cardType: 'SPELL',
-        contentId: id,
-        spellId: id,
-      });
-    }
-  };
-
-  for (const id of remainingHandIds) {
-    matchAndMove(id, newSpellHand);
-  }
-  for (const id of remainingDrawIds) {
-    matchAndMove(id, newSpellDrawPile);
-  }
-  for (const id of remainingDiscardIds) {
-    matchAndMove(id, newSpellDiscardPile);
-  }
-
-  // Preserve all Creature cards in their current zones
-  const creatureDraw = unified.drawPile.filter((c): c is CreatureCard => c.cardType === 'CREATURE');
-  const creatureDiscard = unified.discardPile.filter((c): c is CreatureCard => c.cardType === 'CREATURE');
-
-  // Reassign the unified zones
-  unified.spellHand = newSpellHand;
-  unified.drawPile = [...creatureDraw, ...newSpellDrawPile];
-  unified.discardPile = [...creatureDiscard, ...newSpellDiscardPile];
+  legacy.hand = unified.spellHand.map((card) => card.spellId);
+  legacy.drawPile = unified.drawPile
+    .filter((card): card is SpellCard => card.cardType === 'SPELL')
+    .map((card) => card.spellId);
+  legacy.discardPile = unified.discardPile
+    .filter((card): card is SpellCard => card.cardType === 'SPELL')
+    .map((card) => card.spellId);
 }
 
 /**
@@ -1367,27 +1351,20 @@ export function executeOpeningDraw(
   // 1. Player opening draw
   if (state.playerCombatDeck) {
     state.playerCombatDeck = initializeOpeningCombatCards(state.playerCombatDeck, random);
-    state.playerDeck.hand = state.playerCombatDeck.spellHand.map((c) => c.spellId);
-    state.playerDeck.drawPile = state.playerCombatDeck.drawPile
-      .filter((c): c is SpellCard => c.cardType === 'SPELL')
-      .map((c) => c.spellId);
-    state.playerDeck.discardPile = state.playerCombatDeck.discardPile
-      .filter((c): c is SpellCard => c.cardType === 'SPELL')
-      .map((c) => c.spellId);
+    syncLegacySpellDeckFromUnified(state.playerCombatDeck, state.playerDeck);
   }
 
   // 2. Enemy opening draw
   if (state.enemyCombatDeck) {
     state.enemyCombatDeck = initializeOpeningCombatCards(state.enemyCombatDeck, random);
-    state.enemyDeck.hand = state.enemyCombatDeck.spellHand.map((c) => c.spellId);
-    state.enemyDeck.drawPile = state.enemyCombatDeck.drawPile
-      .filter((c): c is SpellCard => c.cardType === 'SPELL')
-      .map((c) => c.spellId);
-    state.enemyDeck.discardPile = state.enemyCombatDeck.discardPile
-      .filter((c): c is SpellCard => c.cardType === 'SPELL')
-      .map((c) => c.spellId);
+    syncLegacySpellDeckFromUnified(state.enemyCombatDeck, state.enemyDeck);
   }
 
   state.openingDrawCompleted = true;
+
+  // Set the draw tracking so that player turn 1 skips their per-turn mixed card draw
+  state.lastCardDrawTurn = 1;
+  state.lastCardDrawSide = 'player';
+
   return true;
 }

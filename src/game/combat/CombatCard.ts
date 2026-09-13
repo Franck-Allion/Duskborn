@@ -238,3 +238,77 @@ export function hasDuplicateCardInstances(state: CombatCardState): boolean {
   }
   return false;
 }
+
+export type CombatCardDrawResult =
+  | {
+      outcome: 'DRAWN_TO_HAND';
+      card: SpellCard;
+    }
+  | {
+      outcome: 'DRAWN_TO_BENCH';
+      card: CreatureCard;
+    }
+  | {
+      outcome: 'BURNED';
+      card: CombatCard;
+      reason: 'SPELL_HAND_FULL' | 'CREATURE_BENCH_FULL';
+    }
+  | {
+      outcome: 'EMPTY_DECK';
+    };
+
+/**
+ * Draws exactly one mixed card from the draw pile, removes it, and routes it
+ * based on card type to either spellHand or creatureBench, respecting limits.
+ *
+ * Overflow behavior:
+ * - If spell hand is full (>= MAX_SPELL_HAND), the Spell card is burned (moved directly to discardPile)
+ *   with a BURNED / SPELL_HAND_FULL outcome.
+ * - If creature bench is full (>= MAX_CREATURE_BENCH), the Creature card is burned (moved directly to discardPile)
+ *   with a BURNED / CREATURE_BENCH_FULL outcome.
+ * - The card is always consumed from the draw pile.
+ */
+export function drawCombatCard(
+  cards: CombatCardState,
+): CombatCardDrawResult {
+  if (cards.drawPile.length === 0) {
+    return { outcome: 'EMPTY_DECK' };
+  }
+
+  // Remove exactly first/top card
+  const card = cards.drawPile.shift()!;
+
+  if (card.cardType === 'SPELL') {
+    const spellCard = card as SpellCard;
+    if (cards.spellHand.length < MAX_SPELL_HAND) {
+      cards.spellHand.push(spellCard);
+      return {
+        outcome: 'DRAWN_TO_HAND',
+        card: spellCard,
+      };
+    } else {
+      cards.discardPile.push(spellCard);
+      return {
+        outcome: 'BURNED',
+        card: spellCard,
+        reason: 'SPELL_HAND_FULL',
+      };
+    }
+  } else {
+    const creatureCard = card as CreatureCard;
+    if (cards.creatureBench.length < MAX_CREATURE_BENCH) {
+      cards.creatureBench.push(creatureCard);
+      return {
+        outcome: 'DRAWN_TO_BENCH',
+        card: creatureCard,
+      };
+    } else {
+      cards.discardPile.push(creatureCard);
+      return {
+        outcome: 'BURNED',
+        card: creatureCard,
+        reason: 'CREATURE_BENCH_FULL',
+      };
+    }
+  }
+}

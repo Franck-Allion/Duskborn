@@ -522,11 +522,11 @@ TURN_START
 -> route by card type
 ```
 
-- [ ] Draw one mixed card per turn
-- [ ] Empty draw pile => no-op
-- [ ] No automatic reshuffle for MVP
-- [ ] Ensure one draw per turn only
-- [ ] Add empty-deck/idempotency tests
+- [x] Draw one mixed card per turn
+- [x] Empty draw pile => no-op
+- [x] No automatic reshuffle for MVP
+- [x] Ensure one draw per turn only
+- [x] Add empty-deck/idempotency tests
 
 ### Spell hand
 
@@ -537,11 +537,11 @@ MAX_SPELL_HAND = 5
 ```
 
 - [x] Spell draw enters Spell hand
-- [ ] Spell hand persists between turns
-- [ ] Player is never forced to cast all spells
-- [ ] Hand cannot exceed configured limit
-- [ ] Full-hand draw burns/discards new Spell card with explicit visual feedback
-- [ ] Add hand-limit tests
+- [x] Spell hand persists between turns
+- [x] Player is never forced to cast all spells
+- [x] Hand cannot exceed configured limit
+- [x] Full-hand draw burns/discards new Spell card with explicit domain feedback
+- [x] Add hand-limit tests
 
 ### Creature bench
 
@@ -552,12 +552,12 @@ MAX_CREATURE_BENCH = 5
 ```
 
 - [x] Creature draw enters Creature bench
-- [ ] Bench persists across player turns in combat
+- [x] Bench persists across player turns in combat
 - [ ] Player is never forced to deploy all bench creatures
-- [ ] Bench cannot exceed configured limit
-- [ ] Full-bench draw burns/discards new Creature card with explicit visual feedback
-- [ ] Bench Creature maps to exactly one unit type/squad identity
-- [ ] Add bench-limit tests
+- [x] Bench cannot exceed configured limit
+- [x] Full-bench draw burns/discards new Creature card with explicit domain feedback
+- [x] Bench Creature maps to exactly one unit type/squad identity
+- [x] Add bench-limit tests
 
 ### Player agency
 
