@@ -536,6 +536,90 @@ export function repositionSquad(
 }
 
 /**
+ * Checks if swapping the positions of two squads is legal.
+ * Rules:
+ * - Only legal when state.phase is 'DEPLOYMENT'.
+ * - Only legal when side matches state.activeSide.
+ * - Both squads must exist and belong to the active side.
+ * - Both squads must be surviving (count > 0).
+ * - Both squads must have non-null positions.
+ * - Unit type IDs must be different.
+ * - Prospective final board must be valid under all current deployment invariants.
+ */
+export function canSwapSquads(
+  state: CombatState,
+  side: CombatSide,
+  firstUnitTypeId: string,
+  secondUnitTypeId: string,
+): boolean {
+  if (state.phase !== 'DEPLOYMENT' || side !== state.activeSide) {
+    return false;
+  }
+
+  if (firstUnitTypeId === secondUnitTypeId) {
+    return false;
+  }
+
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squadA = squads.find((s) => s.unitTypeId === firstUnitTypeId);
+  const squadB = squads.find((s) => s.unitTypeId === secondUnitTypeId);
+
+  if (!squadA || !squadB) {
+    return false;
+  }
+
+  if (squadA.count <= 0 || squadB.count <= 0) {
+    return false;
+  }
+
+  if (squadA.position === null || squadB.position === null) {
+    return false;
+  }
+
+  // Construct a prospective swapped state
+  const tempState = structuredClone(state);
+  const tempSquads = side === 'player' ? tempState.playerSquads : tempState.enemySquads;
+  const tempSquadA = tempSquads.find((s) => s.unitTypeId === firstUnitTypeId)!;
+  const tempSquadB = tempSquads.find((s) => s.unitTypeId === secondUnitTypeId)!;
+
+  const posA = tempSquadA.position;
+  const posB = tempSquadB.position;
+
+  tempSquadA.position = posB;
+  tempSquadB.position = posA;
+
+  // Validate the final prospective swapped board
+  return isSideDeploymentValid(tempState, side);
+}
+
+/**
+ * Swaps the positions of two surviving friendly squads during DEPLOYMENT.
+ * This is an atomic operation: only mutates state if the prospective final board is legal.
+ */
+export function swapSquads(
+  state: CombatState,
+  side: CombatSide,
+  firstUnitTypeId: string,
+  secondUnitTypeId: string,
+): boolean {
+  if (!canSwapSquads(state, side, firstUnitTypeId, secondUnitTypeId)) {
+    return false;
+  }
+
+  const squads = side === 'player' ? state.playerSquads : state.enemySquads;
+  const squadA = squads.find((s) => s.unitTypeId === firstUnitTypeId)!;
+  const squadB = squads.find((s) => s.unitTypeId === secondUnitTypeId)!;
+
+  const posA = squadA.position;
+  const posB = squadB.position;
+
+  squadA.position = posB;
+  squadB.position = posA;
+
+  return true;
+}
+
+/**
  * Plays a spell from the hand for the specified side.
  * Rules:
  * - Only legal when state.phase is 'ACTION'.

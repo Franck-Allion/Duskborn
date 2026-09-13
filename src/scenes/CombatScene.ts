@@ -17,6 +17,8 @@ import {
   confirmDeployment,
   canRepositionSquad,
   repositionSquad,
+  canSwapSquads,
+  swapSquads,
   DEFAULT_COMBAT_MAX_MANA,
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
@@ -355,6 +357,31 @@ export class CombatScene extends Phaser.Scene {
       !!squad &&
       canRepositionSquad(this.combatState, 'player', squad.unitTypeId, position)
     );
+  }
+
+  private canPlaceOrSwapPlayerSquad(
+    index: number,
+    position: CombatPosition,
+  ): boolean {
+    const squad = this.combatState.playerSquads[index];
+    if (!squad) return false;
+
+    // 1. Can we do a normal reposition?
+    if (canRepositionSquad(this.combatState, 'player', squad.unitTypeId, position)) {
+      return true;
+    }
+
+    // 2. Can we do a swap? (Only during drag-and-drop)
+    if (this.currentDragSquadIndex !== null) {
+      const otherSquad = this.combatState.playerSquads.find(
+        (s) => s.position?.column === position.column && s.position?.row === position.row
+      );
+      if (otherSquad && otherSquad.count > 0 && otherSquad.unitTypeId !== squad.unitTypeId) {
+        return canSwapSquads(this.combatState, 'player', squad.unitTypeId, otherSquad.unitTypeId);
+      }
+    }
+
+    return false;
   }
 
   private handleCellClick(pos: CombatPosition): void {
