@@ -4,8 +4,9 @@ import {
   createInitialPlayerSpellDeck,
   createInitialEnemySpellDeck,
   endTurn,
+  isSideDeploymentValid,
 } from '../src/game/combat/CombatState';
-import { runEnemyTurn } from '../src/game/combat/EnemyTurnAI';
+import { runEnemyTurn, orchestrateAutomaticPhases } from '../src/game/combat/EnemyTurnAI';
 import { ABILITY_REGISTRY } from '../src/game/content/abilities';
 
 describe('EnemyTurnAI logical turn execution loop', () => {
@@ -244,5 +245,156 @@ describe('EnemyTurnAI logical turn execution loop', () => {
     expect(stateA.playerHeroHp).toEqual(stateB.playerHeroHp);
     expect(stateA.playerHeroShield).toEqual(stateB.playerHeroShield);
     expect(stateA.phase).toEqual(stateB.phase);
+  });
+
+  it('reproduces the exact reported case where Brute is already facing Archer (valid deployment) and does NOT reposition unnecessarily', () => {
+    const state = createPlayerTurnEndCombat();
+    endTurn(state); // enemy active, DEPLOYMENT
+
+    // Player: Guardian in col 5, Archer in col 2 (both alive)
+    state.playerSquads = [
+      { unitTypeId: 'guardian', count: 5, damagedUnitHp: null, position: { column: 5, row: 2 } },
+      { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: { column: 2, row: 3 } },
+    ];
+
+    // Enemy: Brute in col 2 (directly facing Archer). Duskborn Archer is dead.
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 4, damagedUnitHp: null, position: { column: 2, row: 1 } },
+      { unitTypeId: 'duskborn-archer', count: 0, damagedUnitHp: null, position: null }, // DEAD
+    ];
+
+    // required coverage count = min(1 enemy squad, 2 player lanes) = 1
+    // actual coverage = 1 (Brute covers col 2)
+    // Therefore, deployment is already valid!
+    expect(isSideDeploymentValid(state, 'enemy')).toBe(true);
+
+    // Run AI turn
+    const success = runEnemyTurn(state);
+    expect(success).toBe(true);
+
+    // Brute must NOT have repositioned to col 5 (or elsewhere), it remains at col 2!
+    const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
+    expect(brute.position).toEqual({ column: 2, row: 1 });
+  });
+
+  it('repositions the Brute if the current deployment is invalid (empty lane) to face one of the player columns', () => {
+    const state = createPlayerTurnEndCombat();
+    endTurn(state); // enemy active, DEPLOYMENT
+
+    // Player: Guardian in col 5, Archer in col 2 (both alive)
+    state.playerSquads = [
+      { unitTypeId: 'guardian', count: 5, damagedUnitHp: null, position: { column: 5, row: 2 } },
+      { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: { column: 2, row: 3 } },
+    ];
+
+    // Enemy: Brute is currently at col 0 (uncovered empty lane)
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 4, damagedUnitHp: null, position: { column: 0, row: 1 } },
+      { unitTypeId: 'duskborn-archer', count: 0, damagedUnitHp: null, position: null }, // DEAD
+    ];
+
+    // required = 1, actual = 0. Invalid!
+    expect(isSideDeploymentValid(state, 'enemy')).toBe(false);
+
+    // Run AI turn
+    const success = runEnemyTurn(state);
+    expect(success).toBe(true);
+
+    // Brute must move into either col 5 or col 2!
+    const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
+    expect(brute.position).not.toBeNull();
+    expect([2, 5]).toContain(brute.position!.column);
+  });
+
+  it('repositions exactly one redundant squad when required, leaving the other to cover the original lane', () => {
+    const state = createPlayerTurnEndCombat();
+    endTurn(state); // enemy active, DEPLOYMENT
+
+    // Player: Guardian in col 5, Archer in col 2 (both alive)
+    state.playerSquads = [
+      { unitTypeId: 'guardian', count: 5, damagedUnitHp: null, position: { column: 5, row: 2 } },
+      { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: { column: 2, row: 3 } },
+    ];
+
+    // Enemy: both Brute and Duskborn Archer are in col 2 (covers col 2 redundantly)
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 4, damagedUnitHp: null, position: { column: 2, row: 1 } },
+      { unitTypeId: 'duskborn-archer', count: 2, damagedUnitHp: null, position: { column: 2, row: 0 } },
+    ];
+
+    // required = 2, actual = 1 (only col 2 is covered, col 5 is uncovered). Invalid!
+    expect(isSideDeploymentValid(state, 'enemy')).toBe(false);
+
+    // Run AI turn
+    const success = runEnemyTurn(state);
+    expect(success).toBe(true);
+
+    const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
+    const archer = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-archer')!;
+
+    // Exactly one squad should have moved to column 5, and the other remains in column 2!
+    const cols = [brute.position!.column, archer.position!.column];
+    expect(cols).toContain(2);
+    expect(cols).toContain(5);
+  });
+
+  it('preserves valid two-lane deployment completely unchanged', () => {
+    const state = createPlayerTurnEndCombat();
+    endTurn(state); // enemy active, DEPLOYMENT
+
+    // Player: Guardian in col 5, Archer in col 2 (both alive)
+    state.playerSquads = [
+      { unitTypeId: 'guardian', count: 5, damagedUnitHp: null, position: { column: 5, row: 2 } },
+      { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: { column: 2, row: 3 } },
+    ];
+
+    // Enemy: Brute covers col 2, Duskborn Archer covers col 5. Already valid!
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 4, damagedUnitHp: null, position: { column: 2, row: 1 } },
+      { unitTypeId: 'duskborn-archer', count: 2, damagedUnitHp: null, position: { column: 5, row: 0 } },
+    ];
+
+    expect(isSideDeploymentValid(state, 'enemy')).toBe(true);
+
+    const success = runEnemyTurn(state);
+    expect(success).toBe(true);
+
+    const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
+    const archer = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-archer')!;
+
+    // Neither should have changed their column!
+    expect(brute.position!.column).toBe(2);
+    expect(archer.position!.column).toBe(5);
+  });
+
+  it('runs the full automatic enemy-turn handoff cleanly even with fewer enemy squads than player lanes', () => {
+    const state = createPlayerTurnEndCombat();
+    // Player has 2 squads in col 2 and col 5
+    state.playerSquads = [
+      { unitTypeId: 'guardian', count: 5, damagedUnitHp: null, position: { column: 2, row: 2 } },
+      { unitTypeId: 'archer', count: 3, damagedUnitHp: null, position: { column: 5, row: 3 } },
+    ];
+    // Enemy has only 1 surviving Brute
+    state.enemySquads = [
+      { unitTypeId: 'duskborn-brute', count: 4, damagedUnitHp: null, position: null }, // starts unplaced
+      { unitTypeId: 'duskborn-archer', count: 0, damagedUnitHp: null, position: null }, // dead
+    ];
+
+    state.phase = 'TURN_END';
+    state.activeSide = 'player';
+
+    // Player ends turn -> should trigger entire enemy turn and return back to Player Deployment automatically!
+    const transitioned = orchestrateAutomaticPhases(state);
+    expect(transitioned).toBe(true);
+
+    // Control returned cleanly to player, turn advanced to 3
+    expect(state.activeSide).toBe('player');
+    expect(state.phase).toBe('DEPLOYMENT');
+    expect(state.turn).toBe(3);
+
+    // Single Brute successfully positioned itself in one of the player-occupied columns (2 or 5)
+    const brute = state.enemySquads.find((s) => s.unitTypeId === 'duskborn-brute')!;
+    expect(brute.position).not.toBeNull();
+    expect([2, 5]).toContain(brute.position!.column);
   });
 });

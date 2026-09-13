@@ -10,6 +10,7 @@ import {
   endTurn,
   getCombatResult,
   getUncoveredOpponentColumns,
+  isSideDeploymentValid,
 } from './CombatState';
 import {
   GRID_COLUMNS,
@@ -17,28 +18,74 @@ import {
   ROW_ENEMY_BACK,
 } from './CombatGrid';
 import type { CombatPosition } from './CombatPosition';
+import type { Squad } from './Squad';
 import { UNIT_REGISTRY } from '../content/unitTypes';
 import { ABILITY_REGISTRY } from '../content/abilities';
 import { SPELL_REGISTRY } from '../content/spells';
 
 /**
- * Executes a single, completely deterministic, legal turn for the enemy/Duskborn AI side.
- * Coordinates transitions through DEPLOYMENT -> ACTION -> RESOLUTION -> TURN_END.
- * Does not automatically trigger the final endTurn() handoff.
- * 
- * Returns true if the turn resolved successfully, or false if any step was illegal or failed.
+ * Deterministically repositions surviving enemy squads for deployment,
+ * keeping existing valid layouts if possible, and performing minimal corrections otherwise.
+ * Stops repositioning as soon as isSideDeploymentValid(state, 'enemy') becomes true.
  */
-export function runEnemyTurn(state: CombatState): boolean {
-  // 1. Precondition: activeSide must be 'enemy' and phase must be 'DEPLOYMENT'
-  if (state.activeSide !== 'enemy' || state.phase !== 'DEPLOYMENT') {
-    return false;
+export function repositionEnemySquadsForDeployment(state: CombatState): boolean {
+  // 1. If current deployment is already valid for enemy, do absolutely nothing!
+  if (isSideDeploymentValid(state, 'enemy')) {
+    return true;
   }
 
-  // --- STAGE 1: DEPLOYMENT ---
-  // Reposition surviving enemy squads deterministically.
   const survivingEnemySquads = state.enemySquads.filter((s) => s.count > 0);
 
-  for (const squad of survivingEnemySquads) {
+  // 2. Identify candidate squads to move, prioritized by:
+  //    1) squad currently in a column with no surviving player squad (empty column)
+  //    2) squad redundant in a player-occupied column already covered by another enemy squad
+  //    3) uniquely covering squad (should preserve if possible)
+  //    - stable tie-break by enemySquads definition/array order
+  const playerColumns = new Set(
+    state.playerSquads
+      .filter((s) => s.count > 0 && s.position !== null)
+      .map((s) => s.position!.column)
+  );
+
+  function getSquadPriority(squad: Squad): number {
+    if (squad.position === null) {
+      return 0; // unpositioned squads get highest priority to move
+    }
+    const col = squad.position.column;
+    if (!playerColumns.has(col)) {
+      return 1; // empty column (covers no opponent lane)
+    }
+
+    // Check if redundant: is there another enemy squad in the same column?
+    const othersInSameCol = survivingEnemySquads.filter(
+      (s) => s.unitTypeId !== squad.unitTypeId && s.position !== null && s.position.column === col
+    );
+    if (othersInSameCol.length > 0) {
+      return 2; // redundant squad in covered player lane
+    }
+
+    return 3; // uniquely covering squad (preserve)
+  }
+
+  // Sort squads to move: priority ascending (lowest number first, so unpositioned first, then empty, then redundant, then uniquely covering)
+  const sortedSquads = [...survivingEnemySquads].sort((a, b) => {
+    const prioA = getSquadPriority(a);
+    const prioB = getSquadPriority(b);
+    if (prioA !== prioB) {
+      return prioA - prioB;
+    }
+    // Stable array order tie-breaker
+    const indexA = state.enemySquads.indexOf(a);
+    const indexB = state.enemySquads.indexOf(b);
+    return indexA - indexB;
+  });
+
+  // 3. Move squads one-by-one until deployment becomes valid
+  for (const squad of sortedSquads) {
+    if (isSideDeploymentValid(state, 'enemy')) {
+      break;
+    }
+
     // Prioritize candidates: uncovered opponent-occupied columns first (ensures maximum coverage count is reached first)
     const uncoveredCols = getUncoveredOpponentColumns(state, 'enemy');
     const uncoveredColsSet = new Set(uncoveredCols);
@@ -88,6 +135,30 @@ export function runEnemyTurn(state: CombatState): boolean {
         return false;
       }
     }
+  }
+
+  return isSideDeploymentValid(state, 'enemy');
+}
+
+/**
+ * Executes a single, completely deterministic, legal turn for the enemy/Duskborn AI side.
+ * Coordinates transitions through DEPLOYMENT -> ACTION -> RESOLUTION -> TURN_END.
+ * Does not automatically trigger the final endTurn() handoff.
+ * 
+ * Returns true if the turn resolved successfully, or false if any step was illegal or failed.
+ */
+export function runEnemyTurn(state: CombatState): boolean {
+  // 1. Precondition: activeSide must be 'enemy' and phase must be 'DEPLOYMENT'
+  if (state.activeSide !== 'enemy' || state.phase !== 'DEPLOYMENT') {
+    return false;
+  }
+
+  const survivingEnemySquads = state.enemySquads.filter((s) => s.count > 0);
+
+  // --- STAGE 1: DEPLOYMENT ---
+  // Reposition surviving enemy squads deterministically, keeping existing valid deployment if possible.
+  if (!repositionEnemySquadsForDeployment(state)) {
+    return false;
   }
 
   // Confirm enemy deployment and transition to ACTION phase
