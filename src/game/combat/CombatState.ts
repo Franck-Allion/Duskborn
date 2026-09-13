@@ -219,14 +219,41 @@ export function spendMana(
 }
 
 /**
+ * Checks if the combat deployment state is currently valid for a specific side.
+ * Validation conditions:
+ * 1. The overall deployment structures must be valid (isDeploymentValid).
+ * 2. Every lane containing at least one surviving opposing squad must be covered by at least one surviving positioned friendly squad of the given side.
+ */
+export function isSideDeploymentValid(
+  state: CombatState,
+  side: CombatSide,
+): boolean {
+  if (!isDeploymentValid(state)) {
+    return false;
+  }
+
+  const uncovered = getUncoveredOpponentColumns(state, side);
+  if (uncovered.length > 0) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Confirms deployment for the active side and transitions to ACTION phase.
  * Transition rules:
  * - Only valid when phase is 'DEPLOYMENT'.
  * - Transitions state.phase to 'ACTION'.
- * - Returns true if successful, or false if the phase was invalid (leaving state unchanged).
+ * - Requires all opponent lanes to be fully covered by the active side's positioned surviving squads.
+ * - Returns true if successful, or false if the phase was invalid or lane coverage was incomplete (leaving state unchanged).
  */
 export function confirmDeployment(state: CombatState): boolean {
   if (state.phase !== 'DEPLOYMENT') {
+    return false;
+  }
+
+  if (!isSideDeploymentValid(state, state.activeSide)) {
     return false;
   }
 
@@ -335,15 +362,16 @@ export function getEngagedColumns(
 }
 
 /**
- * Retrieves the columns occupied by surviving opposing squads that are not currently covered
- * by any of the other (excluding the moving squad) surviving, positioned friendly squads.
- * If this list is not empty, any reposition/deployment of the moving squad must cover
- * one of these uncovered columns to be legal.
+ * Finds all columns containing at least one surviving positioned opposing squad
+ * that are currently NOT covered by at least one surviving positioned friendly squad of the given side.
+ * Symmetrically ignores dead squads and unpositioned squads.
+ * 
+ * If excludedUnitTypeId is provided, that unit's current position is conceptually ignored.
  */
-export function getRequiredCoverageColumns(
+export function getUncoveredOpponentColumns(
   state: CombatState,
   side: CombatSide,
-  movingUnitTypeId: string,
+  excludedUnitTypeId?: string,
 ): number[] {
   const squads = side === 'player' ? state.playerSquads : state.enemySquads;
   const opponents = side === 'player' ? state.enemySquads : state.playerSquads;
@@ -355,22 +383,22 @@ export function getRequiredCoverageColumns(
       .map((s) => s.position!.column)
   );
 
-  // 2. Identify columns covered by other friendly squads (excluding the moving unit itself)
-  const otherColumnsOfMovingSide = new Set(
+  // 2. Identify columns covered by surviving positioned squads on our side (excluding the specified one if any)
+  const friendlyColumns = new Set(
     squads
-      .filter((s) => s.count > 0 && s.position !== null && s.unitTypeId !== movingUnitTypeId)
+      .filter((s) => s.count > 0 && s.position !== null && s.unitTypeId !== excludedUnitTypeId)
       .map((s) => s.position!.column)
   );
 
-  // 3. Find which opponent-occupied columns are left uncovered by others
-  const uncoveredByOthers: number[] = [];
+  // 3. Return opponent columns that are not present in the friendly occupied-column set
+  const uncovered: number[] = [];
   for (const col of opposingOccupiedColumns) {
-    if (!otherColumnsOfMovingSide.has(col)) {
-      uncoveredByOthers.push(col);
+    if (!friendlyColumns.has(col)) {
+      uncovered.push(col);
     }
   }
 
-  return uncoveredByOthers;
+  return uncovered;
 }
 
 /**
@@ -435,7 +463,7 @@ export function canRepositionSquad(
   }
 
   // 5.5 Lane engagement validation using the symmetric coverage rule
-  const requiredCols = getRequiredCoverageColumns(state, side, unitTypeId);
+  const requiredCols = getUncoveredOpponentColumns(state, side, unitTypeId);
   if (requiredCols.length > 0) {
     if (!requiredCols.includes(targetPosition.column)) {
       return false;

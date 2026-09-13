@@ -171,14 +171,14 @@ describe('Combat Model Data structures', () => {
       unitTypeId: 'guardian',
       count: 8,
       damagedUnitHp: null,
-      position: { column: 0, row: 0 },
+      position: { column: 0, row: 2 },
     };
 
     const enemySquad: Squad = {
       unitTypeId: 'duskborn_grunt',
       count: 5,
       damagedUnitHp: 3,
-      position: { column: 5, row: 3 },
+      position: { column: 5, row: 1 },
     };
 
     const combatState: CombatState = {
@@ -208,6 +208,7 @@ describe('Combat Model Data structures', () => {
     expect(combatState.phase).toBe('TURN_START');
 
     expect(beginTurn(combatState)).toBe(true);
+    combatState.enemySquads = []; // Clear enemy squads so deployment confirmation is unconstrained
     expect(confirmDeployment(combatState)).toBe(true);
     expect(combatState.phase).toBe('ACTION');
   });
@@ -1392,6 +1393,7 @@ describe('Combat Model Data structures', () => {
       expect(state.phase).toBe('DEPLOYMENT');
 
       // Transitions for enemy side
+      state.playerSquads = []; // Clear player squads so deployment confirmation is unconstrained
       expect(confirmDeployment(state)).toBe(true);
       expect(tryUseAbility(state, 'enemy', 'duskborn-brute', 'duskborn-brute-strike')).toBe(true);
       expect(confirmAttack(state)).toBe(true);

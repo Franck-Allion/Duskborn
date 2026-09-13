@@ -3,6 +3,9 @@ import {
   type CombatState,
   canRepositionSquad,
   repositionSquad,
+  confirmDeployment,
+  getUncoveredOpponentColumns,
+  isSideDeploymentValid,
 } from '../src/game/combat/CombatState';
 
 describe('symmetric lane-coverage reposition rules', () => {
@@ -145,5 +148,102 @@ describe('symmetric lane-coverage reposition rules', () => {
 
     const target = { column: 4, row: 2 };
     expect(canRepositionSquad(state, 'player', 'guardian', target)).toBe(true);
+  });
+
+  it('correctly reproduces the reported bug sequence and forces correct deployment coverage on confirmation', () => {
+    const state = createBaseState();
+    // Turn 1 setup:
+    // Player Archer faces Duskborn Brute in col 4 (column B)
+    // Player Guardian faces Duskborn Archer in col 1 (column A)
+    state.playerSquads[0].position = { column: 1, row: 2 }; // Guardian (col 1 FRONT)
+    state.playerSquads[1].position = { column: 4, row: 3 }; // Archer (col 4 BACK)
+
+    state.enemySquads[0].position = { column: 4, row: 1 }; // Brute (col 4 FRONT)
+    state.enemySquads[1].position = { column: 1, row: 0 }; // Duskborn Archer (col 1 BACK)
+
+    // Simulate resolution results (Turn 2 begins):
+    // 1. Duskborn Archer is dead (count = 0)
+    state.enemySquads[1].count = 0;
+    // 2. Player Archer is dead (count = 0)
+    state.playerSquads[1].count = 0;
+
+    // Remaining board:
+    // Duskborn Brute survives in col 4
+    // Player Guardian survives in col 1 (the dead Duskborn Archer's old column)
+    expect(state.enemySquads[0].count).toBeGreaterThan(0);
+    expect(state.playerSquads[0].count).toBeGreaterThan(0);
+
+    // Assert: Column 4 is uncovered for the player!
+    expect(getUncoveredOpponentColumns(state, 'player')).toEqual([4]);
+
+    // Assert: confirmDeployment MUST fail because the only surviving enemy (Brute col 4) is uncovered!
+    expect(confirmDeployment(state)).toBe(false);
+    expect(state.phase).toBe('DEPLOYMENT');
+
+    // Symmetrically verify side deployment validation fails
+    expect(isSideDeploymentValid(state, 'player')).toBe(false);
+
+    // Player moves Guardian legally to column 4 FRONT to face the Brute
+    const target = { column: 4, row: 2 };
+    expect(repositionSquad(state, 'player', 'guardian', target)).toBe(true);
+
+    // Assert: Column 4 is now covered, so uncovered list is empty!
+    expect(getUncoveredOpponentColumns(state, 'player')).toEqual([]);
+    expect(isSideDeploymentValid(state, 'player')).toBe(true);
+
+    // Assert: confirmDeployment succeeds now!
+    expect(confirmDeployment(state)).toBe(true);
+    expect(state.phase).toBe('ACTION');
+  });
+
+  it('fails confirmDeployment if opponent has 3 occupied columns but active side has only 2 squads', () => {
+    const state = createBaseState();
+    // Enemy occupies columns 1, 3, 5
+    state.enemySquads[0].position = { column: 1, row: 1 };
+    state.enemySquads[1].position = { column: 3, row: 1 };
+    state.enemySquads.push({
+      unitTypeId: 'duskborn-grunt-3',
+      count: 1,
+      damagedUnitHp: null,
+      position: { column: 5, row: 0 },
+    });
+
+    // Player has only 2 surviving squads
+    state.playerSquads[0].position = { column: 1, row: 2 };
+    state.playerSquads[1].position = { column: 3, row: 2 };
+
+    // Player cannot cover all 3 columns simultaneously, so confirmation fails!
+    expect(isSideDeploymentValid(state, 'player')).toBe(false);
+    expect(confirmDeployment(state)).toBe(false);
+  });
+
+  it('allows confirmDeployment if enemy has no surviving positioned squads', () => {
+    const state = createBaseState();
+    // Enemy is dead/unpositioned
+    state.enemySquads = [];
+
+    // Player squads have valid positions
+    state.playerSquads[0].position = { column: 1, row: 2 };
+    state.playerSquads[1].position = { column: 3, row: 2 };
+
+    expect(isSideDeploymentValid(state, 'player')).toBe(true);
+    expect(confirmDeployment(state)).toBe(true);
+    expect(state.phase).toBe('ACTION');
+  });
+
+  it('allows confirmDeployment if opponent has multiple squads in same column covered by one friendly squad', () => {
+    const state = createBaseState();
+    // Enemy occupies column 2 with both Brute and Archer
+    state.enemySquads[0].position = { column: 2, row: 1 };
+    state.enemySquads[1].position = { column: 2, row: 0 };
+
+    // Player has Guardian covering column 2, and Archer deployed in column 4 (empty enemy lane)
+    state.playerSquads[0].position = { column: 2, row: 2 };
+    state.playerSquads[1].position = { column: 4, row: 3 };
+
+    // Column 2 is covered, no other opponent column is active. So valid!
+    expect(isSideDeploymentValid(state, 'player')).toBe(true);
+    expect(confirmDeployment(state)).toBe(true);
+    expect(state.phase).toBe('ACTION');
   });
 });

@@ -9,7 +9,8 @@ import {
 import type { CombatPosition } from '../game/combat/CombatPosition';
 import type { CombatState } from '../game/combat/CombatState';
 import {
-  isDeploymentValid,
+  isSideDeploymentValid,
+  getUncoveredOpponentColumns,
   beginTurn,
   confirmDeployment,
   canRepositionSquad,
@@ -658,9 +659,14 @@ export class CombatScene extends Phaser.Scene {
       btnBg.on('pointerdown', () => {
         if (!this.canPlayerDeploy() || this.currentDragSquadIndex !== null)
           return;
-        if (!isDeploymentValid(this.combatState)) {
+        if (!isSideDeploymentValid(this.combatState, 'player')) {
           this.cameras.main.shake(100, 0.005);
-          btnText.setText('Deploy All Squads!');
+          const uncovered = getUncoveredOpponentColumns(this.combatState, 'player');
+          if (uncovered.length > 0) {
+            btnText.setText('Cover All Enemy Lanes!');
+          } else {
+            btnText.setText('Deploy All Squads!');
+          }
           btnText.setColor('#f87171'); // red warning text
           // Revert button text after 1.5 seconds
           this.time.delayedCall(1500, () => {
